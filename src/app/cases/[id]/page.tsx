@@ -1,8 +1,7 @@
-"use client";
-
 import { IncidentHeader } from "@/components/ir/IncidentHeader";
 import { InvestigationShell } from "@/components/ir/InvestigationShell";
 import { InvestigationWorkspace } from "@/components/ir/InvestigationWorkspace";
+import { CreatedCaseView } from "@/components/ir/CreatedCaseView";
 
 const incident = {
   id: "IR-2048",
@@ -18,12 +17,21 @@ const incident = {
   updatedAt: "2026-05-26T14:30:22",
 };
 
-export default function Home() {
+interface CasePageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function CasePage({ params }: CasePageProps) {
+  const { id } = await params;
+
+  if (id !== "IR-2048") {
+    return <CreatedCaseView caseId={id} />;
+  }
+
   return (
     <InvestigationShell>
       <div className="space-y-5">
         <IncidentHeader incident={incident} />
-
         <InvestigationWorkspace />
       </div>
     </InvestigationShell>

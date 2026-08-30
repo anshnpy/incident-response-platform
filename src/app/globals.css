@@ -1,26 +1,281 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #06080C;
+  --foreground: #F5F7FA;
+
+  --surface-1: #0B1016;
+  --surface-2: #11161D;
+  --surface-3: #17212B;
+
+  --border: #263441;
+  --border-strong: #3A4652;
+
+  --text-primary: #F5F7FA;
+  --text-secondary: #A7AFBA;
+  --text-muted: #69727E;
+  --text-faint: #464D56;
+
+  --accent-blue: #4F8CFF;
+  --accent-blue-soft: rgba(47, 129, 255, 0.10);
+
+  --accent-violet: #7C6CFF;
+  --accent-violet-soft: rgba(124, 92, 255, 0.10);
+
+  --status-critical: #FF5364;
+  --status-critical-soft: rgba(255, 77, 90, 0.09);
+
+  --status-warning: #FFB84D;
+  --status-warning-soft: rgba(245, 165, 36, 0.09);
+
+  --status-success: #35D6A1;
+  --status-success-soft: rgba(32, 201, 151, 0.09);
+
+  --status-info: #35D6FF;
+  --status-info-soft: rgba(34, 184, 207, 0.09);
+
+  --glow-blue: 0 0 18px rgba(77, 163, 255, 0.20);
+  --glow-violet: 0 0 18px rgba(139, 108, 255, 0.18);
+  --glow-red: 0 0 18px rgba(255, 77, 90, 0.14);
+  --glow-amber: 0 0 18px rgba(245, 165, 36, 0.14);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  min-height: 100%;
+  background: var(--background);
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
+  min-height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 50% -20%,
+      rgba(47, 129, 255, 0.035),
+      transparent 38%
+    ),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: rgba(47, 129, 255, 0.25);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06080C;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1D2229;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2A313A;
+}
+
+@keyframes ir-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes ir-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ir-pulse {
+  animation: ir-pulse 2s ease-in-out infinite;
+}
+
+.ir-fade-up {
+  animation: ir-fade-up 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}/* =========================================================
+   IR CONSOLE TYPOGRAPHY + DENSITY FOUNDATION
+   ========================================================= */
+
+.ir-console {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ir-console button,
+.ir-console input,
+.ir-console textarea,
+.ir-console select {
+  font-family: inherit;
+}
+
+.ir-console .text-\[7px\] {
+  font-size: 9px !important;
+  line-height: 1.35 !important;
+}
+
+.ir-console .text-\[8px\] {
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+
+.ir-console .text-\[9px\] {
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.ir-console .text-\[10px\] {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.ir-console .text-\[11px\] {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.ir-console .text-\[12px\] {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.ir-console .text-\[13px\] {
+  font-size: 14px !important;
+}
+
+.ir-console .text-\[14px\] {
+  font-size: 14px !important;
+}
+
+.ir-console .text-\[15px\] {
+  font-size: 15px !important;
+}
+
+/* Better readability for dense investigation metadata */
+.ir-console .font-mono {
+  letter-spacing: 0.01em;
+}
+
+/* Prevent tiny UI controls from feeling cramped */
+.ir-console button {
+  min-height: 32px;
+}
+
+/* Preserve compact icon-only controls */
+.ir-console button[aria-label] {
+  min-height: 0;
+}
+
+/* =========================================================
+   IR CONSOLE VISUAL FOUNDATION
+   ========================================================= */
+
+.ir-console {
+  --ir-canvas: #07090D;
+  --ir-surface: #0B0F14;
+  --ir-raised: #10151C;
+  --ir-border: #1B2430;
+  --ir-border-strong: #253142;
+
+  --ir-text: #E7ECF2;
+  --ir-text-secondary: #9AA6B2;
+  --ir-text-muted: #66717D;
+
+  --ir-blue: #5B8CFF;
+  --ir-cyan: #4DD7E8;
+  --ir-purple: #8B82FF;
+  --ir-red: #FF4D67;
+  --ir-amber: #F2B84B;
+  --ir-green: #43D39E;
+}
+
+.ir-console {
+  background-color: var(--ir-canvas);
+  color: var(--ir-text);
+}
+
+.ir-console .bg-\[\#08090B\],
+.ir-console .bg-\[\#0B1016\] {
+  background-color: var(--ir-surface) !important;
+}
+
+.ir-console .bg-\[\#101720\] {
+  background-color: var(--ir-raised) !important;
+}
+
+.ir-console .border-\[\#263441\] {
+  border-color: var(--ir-border) !important;
+}
+
+.ir-console .text-\[\#F5F7FA\] {
+  color: var(--ir-text) !important;
+}
+
+.ir-console .text-\[\#D9DEE7\] {
+  color: #D7DDE5 !important;
+}
+
+.ir-console .text-\[\#A7AFBA\] {
+  color: var(--ir-text-secondary) !important;
+}
+
+.ir-console .text-\[\#69727E\] {
+  color: var(--ir-text-muted) !important;
+}
+
