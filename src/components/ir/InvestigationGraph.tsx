@@ -16,40 +16,24 @@ type GraphNode = {
   type: "ip" | "account" | "endpoint" | "malware" | "c2";
 };
 
+interface InvestigationGraphEvent {
+  id: string;
+  title: string;
+  timestamp?: string;
+  entity: {
+    name: string;
+    type: string;
+    technique?: string | null;
+  };
+}
+
 interface InvestigationGraphProps {
   selectedNodeId?: string;
   highlightedTechnique?: string | null;
+  events?: InvestigationGraphEvent[];
   onSelect?: (node: GraphNode) => void;
-  onTraceSelect?: (title: string) => void;
+  onTraceSelect?: (title: string, eventId?: string) => void;
 }
-
-const nodes: GraphNode[] = [
-  {
-    id: "attacker-ip",
-    label: "185.199.109.153",
-    type: "ip",
-  },
-  {
-    id: "account",
-    label: "j.smith",
-    type: "account",
-  },
-  {
-    id: "endpoint",
-    label: "WIN-10-23-17",
-    type: "endpoint",
-  },
-  {
-    id: "malware",
-    label: "mimikatz.exe",
-    type: "malware",
-  },
-  {
-    id: "c2",
-    label: "185.199.109.153:443",
-    type: "c2",
-  },
-];
 
 const nodeStyles = {
   ip: {
@@ -79,19 +63,83 @@ const nodeStyles = {
   },
 };
 
-const pathEvents = [
-  ["01", "09:44:02", "External Connection", "Network"],
-  ["02", "09:45:21", "Credential Dumping", "Execution"],
-  ["03", "09:47:11", "Lateral Movement", "Network"],
-  ["04", "09:51:43", "Domain Controller Access", "Identity"],
-] as const;
-
 export function InvestigationGraph({
   selectedNodeId,
   highlightedTechnique,
+  events = [],
   onSelect,
   onTraceSelect,
 }: InvestigationGraphProps) {
+  const liveNodes: GraphNode[] = Array.from(
+    new Map(
+      events
+        .filter(
+          (event) =>
+            event.entity.name &&
+            event.entity.name !== "Unknown",
+        )
+        .map((event) => {
+          const type = event.entity.type.toLowerCase();
+
+          const nodeType: GraphNode["type"] =
+            type.includes("process") || type.includes("malware")
+              ? "malware"
+              : type.includes("user") || type.includes("account")
+                ? "account"
+                : type.includes("network") || type.includes("ip")
+                  ? "ip"
+                  : "endpoint";
+
+          return [
+            `${nodeType}:${event.entity.name}`,
+            {
+              id: `${nodeType}:${event.entity.name}`,
+              label: event.entity.name,
+              type: nodeType,
+            },
+          ] as const;
+        }),
+    ).values(),
+  ).slice(0, 5);
+
+  const nodes: GraphNode[] =
+    liveNodes.length > 0
+      ? liveNodes
+      : [
+          {
+            id: "endpoint:unknown",
+            label: "No correlated entity",
+            type: "endpoint",
+          },
+        ];
+
+  const graphEvents = events
+    .filter((event) => event.entity.name && event.entity.name !== "Unknown")
+    .slice(0, 8);
+
+  const livePathEvents =
+    graphEvents.length > 0
+      ? graphEvents.slice(0, 4).map((event, index) => [
+          String(index + 1).padStart(2, "0"),
+          event.timestamp
+            ? new Date(event.timestamp).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })
+            : "--:--:--",
+          event.title,
+          event.entity.type,
+          event.id,
+        ] as const)
+      : [];
+
+  const techniqueNodeIds = new Set(
+    graphEvents
+      .filter((event) => event.entity.technique)
+      .map((event) => event.entity.technique),
+  );
+
   const selectedIndex = nodes.findIndex(
     (node) => node.id === selectedNodeId,
   );
@@ -111,11 +159,11 @@ export function InvestigationGraph({
 
         <div className="flex items-center gap-4">
           <span className="font-mono text-[9px] text-[#66717D]">
-            5 entities
+            {nodes.length} entities
           </span>
 
           <span className="font-mono text-[9px] text-[#66717D]">
-            4 links
+            {Math.max(nodes.length - 1, 0)} links
           </span>
         </div>
       </div>
@@ -128,8 +176,13 @@ export function InvestigationGraph({
             const selected = node.id === selectedNodeId;
 
             const techniqueFocused =
-              highlightedTechnique === "T1003.001" &&
-              node.id === "malware";
+              Boolean(highlightedTechnique) &&
+              techniqueNodeIds.has(highlightedTechnique) &&
+              graphEvents.some(
+                (event) =>
+                  event.entity.technique === highlightedTechnique &&
+                  event.entity.name === node.label,
+              );
 
             const distance =
               selectedIndex === -1
@@ -270,11 +323,11 @@ export function InvestigationGraph({
           <div className="absolute left-[3%] right-[3%] top-[6px] h-px bg-[#253142]" />
 
           <div className="relative grid grid-cols-4 gap-5">
-            {pathEvents.map(([step, time, title, type], index) => (
+            {livePathEvents.map(([step, time, title, type, eventId], index) => (
               <motion.button
-                key={title}
+                key={eventId}
                 type="button"
-                onClick={() => onTraceSelect?.(title)}
+                onClick={() => onTraceSelect?.(title, eventId)}
                 initial={{
                   opacity: 0,
                   y: 6,
@@ -315,6 +368,12 @@ export function InvestigationGraph({
                 <div className="mt-2 h-px w-8 bg-[#253142] transition-all duration-200 group-hover:w-14 group-hover:bg-[#4DD7E8]/50" />
               </motion.button>
             ))}
+
+            {livePathEvents.length === 0 && (
+              <div className="col-span-4 rounded-lg border border-[#202A36] bg-[#0E141B] px-4 py-5 text-center text-[9px] text-[#59616D]">
+                No correlated investigation path available.
+              </div>
+            )}
           </div>
         </div>
 

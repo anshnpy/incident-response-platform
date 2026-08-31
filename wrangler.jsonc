@@ -1,29 +1,36 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "incident-response-platform",
-  "compatibility_date": "2026-08-30",
-  "compatibility_flags": [
-    "global_fetch_strictly_public"
-  ],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "vpc_services": [
-    {
-      "binding": "WAZUH_INDEXER",
-      "service_id": "01a028f2-6830-7b02-a6b9-2114da624f08",
-      "remote": true
-    }
-  ],
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "incident-response-platform"
-    }
-  ],
-  "observability": {
-    "enabled": true
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "incident-response-platform",
+	"compatibility_date": "2026-08-30",
+	"compatibility_flags": [
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"vpc_services": [
+		{
+			"binding": "WAZUH_INDEXER",
+			"service_id": "01a028f2-6830-7b02-a6b9-2114da624f08",
+			"remote": true
+		}
+	],
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "incident-response-platform"
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "incident-response-platform-db",
+			"database_id": "abb2f2df-00cd-46fb-85d0-ede7f1669ee3"
+		}
+	]
 }

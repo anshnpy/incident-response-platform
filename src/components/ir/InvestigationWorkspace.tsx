@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { InvestigationEvent } from "@/types/investigation";
 import { motion } from "motion/react";
 import { CaseLifecycle } from "@/components/ir/CaseLifecycle";
 import { ConfirmActionDialog } from "@/components/ir/ConfirmActionDialog";
@@ -11,6 +12,12 @@ import { FindingAuditTrail } from "@/components/ir/FindingAuditTrail";
 import { InvestigationGraph } from "@/components/ir/InvestigationGraph";
 import { RiskEngine } from "@/components/ir/RiskEngine";
 import { EventCorrelationPanel } from "@/components/ir/EventCorrelationPanel";
+import {
+  extractInvestigationArtifacts,
+  normalizeWazuhAlert,
+  type WazuhAlert,
+} from "@/lib/investigation/wazuhNormalizer";
+import { correlateWazuhAlerts } from "@/lib/investigation/correlation";
 import { PlaybookDrawer } from "@/components/ir/PlaybookDrawer";
 import {
   ArrowUpRight,
@@ -22,277 +29,13 @@ import {
   Network,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Terminal,
   UserRound,
   X,
 } from "lucide-react";
 
-type Severity = "critical" | "high" | "medium" | "low";
-
-type EventItem = {
-  id: string;
-  time: string;
-  title: string;
-  description: string;
-  source: string;
-  severity: Severity;
-  entity: {
-    name: string;
-    type: string;
-    verdict: "malicious" | "suspicious";
-    risk: number;
-    details: Record<string, string>;
-    technique?: string;
-  };
-};
-
-const fallbackEvents: EventItem[] = [
-  {
-    id: "evt-001",
-    time: "09:42:11",
-    title: "User Login",
-    description: "j.smith logged on to WIN-10-23-17",
-    source: "Identity",
-    severity: "low",
-    entity: {
-      name: "j.smith",
-      type: "User",
-      verdict: "suspicious",
-      risk: 42,
-      details: {
-        Account: "j.smith@corp.local",
-        Host: "WIN-10-23-17",
-        LogonType: "Interactive",
-      },
-    },
-  },
-  {
-    id: "evt-002",
-    time: "09:42:37",
-    title: "PowerShell Execution",
-    description: "Encoded PowerShell command executed",
-    source: "EDR",
-    severity: "medium",
-    entity: {
-      name: "powershell.exe",
-      type: "Process",
-      verdict: "suspicious",
-      risk: 74,
-      technique: "T1059.001",
-      details: {
-        PID: "4248",
-        User: "j.smith",
-        Host: "WIN-10-23-17",
-        Parent: "explorer.exe",
-      },
-    },
-  },
-  {
-    id: "evt-003",
-    time: "09:44:02",
-    title: "External Connection",
-    description: "Connection to 185.199.109.153:443",
-    source: "Network",
-    severity: "high",
-    entity: {
-      name: "185.199.109.153",
-      type: "IP Address",
-      verdict: "malicious",
-      risk: 91,
-      details: {
-        Protocol: "HTTPS",
-        Port: "443",
-        Direction: "Outbound",
-        Reputation: "Known malicious",
-      },
-    },
-  },
-  {
-    id: "evt-004",
-    time: "09:45:21",
-    title: "Credential Dumping",
-    description: "mimikatz.exe executed against LSASS",
-    source: "EDR",
-    severity: "critical",
-    entity: {
-      name: "mimikatz.exe",
-      type: "Process",
-      verdict: "malicious",
-      risk: 98,
-      technique: "T1003.001",
-      details: {
-        PID: "5124",
-        User: "j.smith",
-        Host: "WIN-10-23-17",
-        Path: "C:\\Users\\j.smith\\Desktop\\mimikatz.exe",
-        Parent: "powershell.exe (PID 4248)",
-      },
-    },
-  },
-  {
-    id: "evt-005",
-    time: "09:46:03",
-    title: "LSASS Access",
-    description: "Process accessed LSASS memory",
-    source: "EDR",
-    severity: "critical",
-    entity: {
-      name: "lsass.exe",
-      type: "Process",
-      verdict: "suspicious",
-      risk: 94,
-      technique: "T1003",
-      details: {
-        PID: "648",
-        Host: "WIN-10-23-17",
-        Operation: "Memory access",
-        Timestamp: "09:46:03",
-      },
-    },
-  },
-  {
-    id: "evt-006",
-    time: "09:47:11",
-    title: "Lateral Movement",
-    description: "SMB connection established to 10.0.5.23",
-    source: "Network",
-    severity: "high",
-    entity: {
-      name: "10.0.5.23",
-      type: "IP Address",
-      verdict: "suspicious",
-      risk: 82,
-      technique: "T1021.002",
-      details: {
-        Protocol: "SMB",
-        Port: "445",
-        Host: "WIN-10-23-17",
-        Direction: "Internal",
-      },
-    },
-  },
-  {
-    id: "evt-007",
-    time: "09:51:43",
-    title: "Domain Controller Access",
-    description: "Privileged authentication observed on DC-01",
-    source: "Identity",
-    severity: "critical",
-    entity: {
-      name: "DC-01.corp.local",
-      type: "Endpoint",
-      verdict: "malicious",
-      risk: 96,
-      technique: "T1078",
-      details: {
-        Role: "Domain Controller",
-        User: "j.smith",
-        Authentication: "Privileged",
-        Host: "DC-01.corp.local",
-      },
-    },
-  },
-];
-
-const evidence = [
-  ["mimikatz.exe", "Process", "09:46:21", "1.24 MB"],
-  ["memory_dump.raw", "Memory", "09:47:19", "512 MB"],
-  ["LSASS_access.evtx", "Windows Event", "09:46:03", "24 KB"],
-  ["auth.log", "Authentication Log", "09:51:43", "19 KB"],
-] as const;
-
-const iocs = [
-  ["185.199.109.153", "Malicious IP", "91"],
-  ["2e4d...a91c", "Malicious Hash", "93"],
-  ["bad-traffic.com", "Suspicious Domain", "81"],
-] as const;
-
-const responseActions = [
-  ["Isolate Host", "Network containment"],
-  ["Disable Account", "Identity containment"],
-  ["Block IOC", "Firewall / EDR"],
-  ["Collect Memory", "Forensic acquisition"],
-] as const;
-
-const severityClass = {
-  critical: "text-[#FF5364]",
-  high: "text-[#FFB84D]",
-  medium: "text-[#4F8CFF]",
-  low: "text-[#35D6A1]",
-} as const;
-
-const severityDot = {
-  critical: "bg-[#FF5364]/[0.06] shadow-[0_0_12px_rgba(255,77,90,0.10)]",
-  high: "bg-[#FFB84D]",
-  medium: "bg-[#4F8CFF]",
-  low: "bg-[#35D6A1]",
-} as const;
-
-function EventIcon({ event }: { event: EventItem }) {
-  if (event.source === "Network") {
-    return <Network className="h-4 w-4" />;
-  }
-
-  if (event.source === "Identity") {
-    return <UserRound className="h-4 w-4" />;
-  }
-
-  if (event.title === "LSASS Access") {
-    return <ShieldAlert className="h-4 w-4" />;
-  }
-
-  if (event.title === "Credential Dumping") {
-    return <Terminal className="h-4 w-4" />;
-  }
-
-  return <Laptop2 className="h-4 w-4" />;
-}
-
-
-interface WazuhAlert {
-  _id?: string;
-  _source?: {
-    agent?: {
-      ip?: string;
-      name?: string;
-      id?: string;
-    };
-    rule?: {
-      level?: number;
-      description?: string;
-      id?: string;
-      mitre?: {
-        technique?: string[] | string;
-        id?: string[] | string;
-        tactic?: string[] | string;
-      };
-    };
-    data?: {
-      win?: {
-        eventdata?: Record<string, string>;
-        system?: {
-          eventID?: string;
-          channel?: string;
-          providerName?: string;
-          computer?: string;
-          message?: string;
-          severityValue?: string;
-        };
-      };
-    };
-    mitre?: {
-      technique?: string[] | string;
-      id?: string[] | string;
-      tactic?: string[] | string;
-    };
-    decoder?: {
-      name?: string;
-    };
-    location?: string;
-    id?: string;
-    "@timestamp"?: string;
-  };
-}
+type EventItem = InvestigationEvent;
 
 interface WazuhAlertsResponse {
   hits?: {
@@ -300,160 +43,64 @@ interface WazuhAlertsResponse {
   };
 }
 
-function firstValue(value?: string[] | string) {
-  if (Array.isArray(value)) {
-    return value[0];
+const severityDot: Record<InvestigationEvent["severity"], string> = {
+  critical: "bg-[#FF5364]",
+  high: "bg-[#FFB84D]",
+  medium: "bg-[#4F8CFF]",
+  low: "bg-[#35D6A1]",
+};
+
+
+function EventIcon({ event }: { event: InvestigationEvent }) {
+  const type = event.entity.type.toLowerCase();
+
+  if (type.includes("process")) {
+    return <Terminal className="h-4 w-4" />;
   }
 
-  return value;
+  if (type.includes("user")) {
+    return <UserRound className="h-4 w-4" />;
+  }
+
+  if (type.includes("network")) {
+    return <Network className="h-4 w-4" />;
+  }
+
+  return <Laptop2 className="h-4 w-4" />;
 }
 
-function severityFromLevel(level?: number): Severity {
-  if (typeof level !== "number") {
-    return "low";
-  }
+const severityClass: Record<InvestigationEvent["severity"], string> = {
+  critical: "text-[#FF5364]",
+  high: "text-[#FFB84D]",
+  medium: "text-[#4F8CFF]",
+  low: "text-[#35D6A1]",
+};
 
-  if (level >= 12) {
-    return "critical";
-  }
-
-  if (level >= 8) {
-    return "high";
-  }
-
-  if (level >= 5) {
-    return "medium";
-  }
-
-  return "low";
-}
-
-function timeFromTimestamp(timestamp?: string) {
-  if (!timestamp) {
-    return "--:--:--";
-  }
-
-  const date = new Date(timestamp);
-
-  if (Number.isNaN(date.getTime())) {
-    return "--:--:--";
-  }
-
-  return date.toLocaleTimeString("en-IN", {
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function normalizeWazuhAlert(
-  alert: WazuhAlert,
-  index: number,
-): EventItem {
-  const source = alert._source;
-  const rule = source?.rule;
-  const agent = source?.agent;
-  const system = source?.data?.win?.system;
-  const eventdata = source?.data?.win?.eventdata ?? {};
-
-  const technique =
-    firstValue(rule?.mitre?.id) ??
-    firstValue(source?.mitre?.id);
-
-  const techniqueName =
-    firstValue(rule?.mitre?.technique) ??
-    firstValue(source?.mitre?.technique);
-
-  const title =
-    rule?.description ??
-    system?.message?.split("\r\n")[0] ??
-    system?.message?.split("\n")[0] ??
-    "Wazuh Alert";
-
-  const entityName =
-    eventdata.image ??
-    eventdata.targetUserName ??
-    eventdata.user ??
-    agent?.name ??
-    "Unknown";
-
-  const entityType =
-    eventdata.image
-      ? "Process"
-      : eventdata.targetUserName
-        ? "User"
-        : "Endpoint";
-
-  const eventSource =
-    source?.decoder?.name === "windows_eventchannel"
-      ? "Windows"
-      : system?.channel ?? source?.location ?? "Wazuh";
-
-  const details: Record<string, string> = {
-    Agent: agent?.name ?? "Unknown",
-    SourceIP: agent?.ip ?? "Unknown",
-    Rule: rule?.id ?? "Unknown",
-    RuleLevel: String(rule?.level ?? 0),
-    EventID: system?.eventID ?? "Unknown",
-  };
-
-  if (system?.channel) {
-    details.Channel = system.channel;
-  }
-
-  if (techniqueName) {
-    details.Technique = techniqueName;
-  }
-
-  if (eventdata.image) {
-    details.Image = eventdata.image;
-  }
-
-  if (eventdata.commandLine) {
-    details.CommandLine = eventdata.commandLine;
-  }
-
-  if (eventdata.hashes) {
-    details.Hashes = eventdata.hashes;
-  }
-
-  if (eventdata.targetUserName) {
-    details.TargetUser = eventdata.targetUserName;
-  }
-
-  const compactDescription =
-    rule?.description ??
-    (eventdata.image
-      ? `${eventdata.image} observed on ${agent?.name ?? "endpoint"}.`
-      : eventdata.targetUserName
-        ? `Activity involving ${eventdata.targetUserName} detected on ${agent?.name ?? "endpoint"}.`
-        : system?.eventID
-          ? `Windows event ${system.eventID} detected on ${agent?.name ?? "endpoint"}.`
-          : `${title} detected by Wazuh.`);
-
-  return {
-    id: alert._id ?? source?.id ?? `wazuh-${index}`,
-    time: timeFromTimestamp(source?.["@timestamp"]),
-    title,
-    description: compactDescription,
-    source: eventSource,
-    severity: severityFromLevel(rule?.level),
-    entity: {
-      name: entityName,
-      type: entityType,
-      verdict: (rule?.level ?? 0) >= 8 ? "suspicious" : "suspicious",
-      risk: Math.min(99, Math.max(15, (rule?.level ?? 0) * 7)),
-      details,
-      ...(technique ? { technique } : {}),
-    },
-  };
-}
+const responseActions: Array<[string, string]> = [
+  [
+    "Isolate Host",
+    "Network containment for the affected endpoint.",
+  ],
+  [
+    "Disable Account",
+    "Suspend the affected account to prevent further authentication.",
+  ],
+  [
+    "Block IOC",
+    "Block the selected indicator through endpoint and network controls.",
+  ],
+  [
+    "Collect Memory",
+    "Acquire a forensic memory image from the affected endpoint.",
+  ],
+];
 
 interface InvestigationWorkspaceProps {
   initialEventId?: string;
   caseContext?: {
     caseId?: string;
+    sourceIncidentId?: string;
+    status?: string;
     sourceIp?: string;
     endpoint?: string;
     technique?: string | null;
@@ -468,9 +115,33 @@ export function InvestigationWorkspace({
   caseContext,
 }: InvestigationWorkspaceProps) {
   const [liveEvents, setLiveEvents] = useState<EventItem[]>([]);
+  const [liveAlerts, setLiveAlerts] = useState<WazuhAlert[]>([]);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
+
+  const investigationRequestKey = JSON.stringify({
+    endpoint: caseContext?.endpoint ?? null,
+    sourceIp: caseContext?.sourceIp ?? null,
+    technique: caseContext?.technique ?? null,
+    title: caseContext?.title ?? null,
+    firstSeen: caseContext?.firstSeen ?? null,
+    lastSeen: caseContext?.lastSeen ?? null,
+  });
+
+  const investigationIsLoading =
+    loadedRequestKey !== investigationRequestKey;
 
   useEffect(() => {
     let cancelled = false;
+
+    const requestKey = JSON.stringify({
+      endpoint: caseContext?.endpoint ?? null,
+      sourceIp: caseContext?.sourceIp ?? null,
+      technique: caseContext?.technique ?? null,
+      title: caseContext?.title ?? null,
+      firstSeen: caseContext?.firstSeen ?? null,
+      lastSeen: caseContext?.lastSeen ?? null,
+    });
 
     const params = new URLSearchParams({
       size: "50",
@@ -516,163 +187,37 @@ export function InvestigationWorkspace({
 
         const alerts = data.hits?.hits ?? [];
 
-        const scored = alerts.map((alert, index) => {
-          const source = alert._source;
-          const agent = source?.agent;
-          const system = source?.data?.win?.system;
-          const eventdata = source?.data?.win?.eventdata ?? {};
-          const rule = source?.rule;
-
-          const endpoint = caseContext?.endpoint?.toLowerCase();
-          const sourceIp = caseContext?.sourceIp?.toLowerCase();
-          const technique = caseContext?.technique?.toLowerCase();
-          const title = caseContext?.title?.toLowerCase() ?? "";
-
-          const agentName = agent?.name?.toLowerCase() ?? "";
-          const agentIp = agent?.ip?.toLowerCase() ?? "";
-          const computer = system?.computer?.toLowerCase() ?? "";
-
-          const ruleDescription =
-            rule?.description?.toLowerCase() ?? "";
-
-          const image =
-            eventdata.image?.toLowerCase() ?? "";
-
-          const commandLine =
-            eventdata.commandLine?.toLowerCase() ?? "";
-
-          const eventMessage =
-            system?.message?.toLowerCase() ?? "";
-
-          const fullText = [
-            ruleDescription,
-            image,
-            commandLine,
-            eventMessage,
-          ].join(" ");
-
-          const ruleTechniques = [
-            ...(Array.isArray(rule?.mitre?.technique)
-              ? rule.mitre.technique
-              : rule?.mitre?.technique
-                ? [rule.mitre.technique]
-                : []),
-            ...(Array.isArray(source?.mitre?.technique)
-              ? source.mitre.technique
-              : source?.mitre?.technique
-                ? [source.mitre.technique]
-                : []),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          const devNoisePatterns = [
-            "eslint",
-            "next build",
-            "npm run",
-            "npm exec",
-            "node.exe",
-            "git config",
-            "git.exe",
-            "conhost.exe",
-            "cmd.exe /d /s /c",
-            "windows command processor",
-            "windows command shell",
-          ];
-
-          const isDevelopmentNoise = devNoisePatterns.some(
-            (pattern) => fullText.includes(pattern),
-          );
-
-          let score = 0;
-          let directCaseMatch = false;
-
-          if (endpoint) {
-            if (agentName === endpoint) {
-              score += 60;
-            }
-
-            if (computer === endpoint) {
-              score += 45;
-            }
-
-            if (
-              agentName.includes(endpoint) ||
-              endpoint.includes(agentName)
-            ) {
-              score += 30;
-            }
-          }
-
-          if (sourceIp && agentIp === sourceIp) {
-            score += 40;
-          }
-
-          if (technique && ruleTechniques.includes(technique)) {
-            score += 70;
-            directCaseMatch = true;
-          }
-
-          const titleTokens = title
-            .split(/[^a-z0-9.:-]+/)
-            .filter((token) => token.length >= 4)
-            .filter(
-              (token) =>
-                !["affects", "affect", "python", "64-bit"].includes(token),
-            );
-
-          for (const token of titleTokens) {
-            if (fullText.includes(token)) {
-              score += 15;
-              directCaseMatch = true;
-            }
-          }
-
-          if (
-            caseContext?.sourceIp &&
-            fullText.includes(caseContext.sourceIp.toLowerCase())
-          ) {
-            score += 20;
-            directCaseMatch = true;
-          }
-
-          if (isDevelopmentNoise && !directCaseMatch) {
-            score = 0;
-          }
-
-          return {
-            alert,
-            index,
-            score,
-            isDevelopmentNoise,
-          };
-        });
-
-        const relevant = scored
-          .filter(
-            (item) => item.score >= 30 && !item.isDevelopmentNoise,
-          )
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 20);
-
-        const selected = relevant.length > 0
-          ? relevant
-          : scored
-              .filter((item) => !item.isDevelopmentNoise)
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 20);
-
-        const normalized = selected.map((item, index) =>
-          normalizeWazuhAlert(item.alert, index),
+        const correlatedAlerts = correlateWazuhAlerts(
+          alerts,
+          {
+            sourceIp: caseContext?.sourceIp,
+            endpoint: caseContext?.endpoint,
+            technique: caseContext?.technique,
+            title: caseContext?.title,
+          },
+          20,
         );
 
+        const normalized = correlatedAlerts.map((alert, index) =>
+          normalizeWazuhAlert(alert, index),
+        );
+
+        setLiveAlerts(correlatedAlerts);
         setLiveEvents(normalized);
+        setEventsError(null);
+        setLoadedRequestKey(requestKey);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          setLiveAlerts([]);
           setLiveEvents([]);
-        }
+          setEventsError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load Wazuh investigation events.",
+          );
+          setLoadedRequestKey(requestKey);
+          }
       });
 
     return () => {
@@ -688,12 +233,71 @@ export function InvestigationWorkspace({
   ]);
 
   const events = useMemo(
-    () => (liveEvents.length > 0 ? liveEvents : fallbackEvents),
+    () => liveEvents,
     [liveEvents],
   );
 
+  const investigationArtifacts = useMemo(() => {
+    return liveAlerts.flatMap((alert, index) => {
+      const event = events.find(
+        (item) =>
+          item.id ===
+          (alert._id ?? alert._source?.id ?? `wazuh-${index}`),
+      );
+
+      if (!event) {
+        return [];
+      }
+
+      return extractInvestigationArtifacts(alert, event);
+    });
+  }, [events, liveAlerts]);
+
+  const evidence = useMemo(
+    () =>
+      investigationArtifacts
+        .filter((artifact) => artifact.type === "evidence")
+        .map(
+          (artifact) =>
+            [
+              artifact.value,
+              artifact.category,
+              new Intl.DateTimeFormat("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date(artifact.timestamp)),
+              "?",
+            ] as [string, string, string, string],
+        ),
+    [investigationArtifacts],
+  );
+
+  const iocs = useMemo(
+    () =>
+      investigationArtifacts
+        .filter((artifact) => artifact.type === "ioc")
+        .map(
+          (artifact) => {
+            const isHash = artifact.category === "SHA-256";
+            const isIp = artifact.category === "IPv4";
+
+            return [
+              artifact.value,
+              isHash ? "hash observed" : isIp ? "source IP observed" : "observed",
+              isHash ? 70 : isIp ? 45 : 50,
+            ] as [string, string, number];
+          },
+        )
+        .filter(
+          (ioc, index, collection) =>
+            collection.findIndex((item) => item[0] === ioc[0]) === index,
+        ),
+    [investigationArtifacts],
+  );
+
   const selectEvent = (id: string) => {
-    selectEvent(id);
+    setSelectedId(id);
 
     if (selectionStorageKey) {
       window.localStorage.setItem(selectionStorageKey, id);
@@ -771,6 +375,146 @@ export function InvestigationWorkspace({
     evidence: string[];
     entities: string[];
   } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!caseContext?.caseId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetch(
+      `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings`,
+      {
+        cache: "no-store",
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Unable to load persisted finding.");
+        }
+
+        return (await response.json()) as {
+          findings?: Array<{
+            id: string;
+            title: string;
+            description: string;
+            severity: string;
+            confidence: string;
+            technique?: string;
+            evidenceIds: string[];
+            entityIds: string[];
+            eventIds: string[];
+            status: string;
+            author?: string;
+            createdAt: string;
+            updatedAt: string;
+          }>;
+        };
+      })
+      .then(async (data) => {
+        if (cancelled) {
+          return;
+        }
+
+        const finding = data.findings?.[0];
+
+        if (!finding) {
+          return;
+        }
+
+        const status =
+          finding.status === "draft" ||
+          finding.status === "review" ||
+          finding.status === "confirmed"
+            ? finding.status
+            : "draft";
+
+        setDraftFinding({
+          title: finding.title,
+          description: finding.description,
+          severity: finding.severity,
+          confidence: finding.confidence,
+          technique: finding.technique ?? "",
+          evidence: finding.evidenceIds,
+          entities: finding.entityIds,
+        });
+
+        setFindingStatus(status);
+
+        const activityResponse = await fetch(
+          `/api/incidents/${encodeURIComponent(caseContext.sourceIncidentId ?? "")}/activity`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (activityResponse.ok) {
+          const activityData = (await activityResponse.json()) as {
+            activity?: Array<{
+              id: string;
+              actor: string;
+              action: string;
+              field: string | null;
+              oldValue: string | null;
+              newValue: string | null;
+              detail: string | null;
+              createdAt: string;
+            }>;
+          };
+
+          const findingActivities = (activityData.activity ?? []).filter(
+            (activity) =>
+              activity.action.startsWith("finding_") ||
+              activity.field === "finding_status",
+          );
+
+          setFindingAuditEvents(
+            findingActivities.map((activity) => ({
+              id: activity.id,
+              label:
+                activity.action === "finding_created"
+                  ? "Finding created"
+                  : activity.action === "finding_review"
+                    ? "Finding sent for review"
+                    : activity.action === "finding_confirmed"
+                      ? "Finding confirmed"
+                      : activity.action === "finding_reopened"
+                        ? "Finding returned to draft"
+                        : "Finding activity",
+              detail:
+                activity.detail ??
+                `${activity.field ?? "Finding"} changed.`,
+              time: new Date(activity.createdAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              tone:
+                activity.action === "finding_confirmed"
+                  ? "success"
+                  : activity.action === "finding_reopened"
+                    ? "info"
+                    : activity.action === "finding_review"
+                      ? "warning"
+                      : "info",
+            })),
+          );
+        } else {
+          setFindingAuditEvents([]);
+        }
+      })
+      .catch(() => {
+        // Keep the investigation usable even if persisted findings
+        // are temporarily unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseContext?.caseId, caseContext?.sourceIncidentId]);
+
   const [playbookOpen, setPlaybookOpen] = useState(false);
   const [playbookRunning, setPlaybookRunning] = useState(false);
   const [playbookCompleted, setPlaybookCompleted] = useState(false);
@@ -783,11 +527,70 @@ export function InvestigationWorkspace({
   const selectedEvent =
     events.find((event) => event.id === selectedId) ??
     events[0] ??
-    fallbackEvents[0];
+    null;
 
-  const entity = selectedEvent.entity;
+  const entity = selectedEvent?.entity ?? null;
 
-  const correlatedEvents = events.filter((event) => event.id !== selectedEvent.id).slice(0, 4);
+  const correlatedEvents = selectedEvent
+    ? events.filter((event) => event.id !== selectedEvent.id).slice(0, 4)
+    : [];
+
+  if (!selectedEvent) {
+    return (
+      <section className="ir-console overflow-hidden rounded-2xl border border-[#263441] bg-[#08090B]">
+        <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[235px_minmax(0,1fr)_300px]">
+          <aside className="border-b border-[#263441]/70 xl:border-b-0 xl:border-r">
+            <div className="border-b border-[#263441]/70 px-5 py-4">
+              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
+                Investigation Timeline
+              </h2>
+              <p className="mt-1 text-[10px] text-[#69727E]">
+                Reconstructed event sequence
+              </p>
+            </div>
+
+            <div className="px-3 py-4">
+              {investigationIsLoading ? (
+                <div className="rounded-lg border border-[#263441] bg-[#10151C] px-3 py-4 text-[10px] text-[#69727E]">
+                  Loading Wazuh events...
+                </div>
+              ) : eventsError ? (
+                <div className="rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.05] px-3 py-4 text-[10px] leading-4 text-[#FF8A96]">
+                  {eventsError}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#263441] bg-[#10151C] px-3 py-4 text-[10px] leading-4 text-[#69727E]">
+                  No correlated Wazuh events were found for this investigation.
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <main className="min-w-0">
+            <div className="flex min-h-[430px] items-center justify-center px-6 py-12">
+              <div className="max-w-md text-center">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[#263441] bg-[#10151C] text-[#59616D]">
+                  <ShieldAlert className="h-4 w-4" />
+                </div>
+
+                <div className="mt-4 text-[12px] font-medium text-[#A7AFBA]">
+                  No investigation event selected
+                </div>
+
+                <p className="mt-1.5 text-[10px] leading-5 text-[#596674]">
+                  {investigationIsLoading
+                    ? "Wazuh investigation telemetry is loading."
+                    : eventsError
+                      ? "The investigation telemetry request failed. Check the error in the timeline."
+                      : "No correlated Wazuh events are available for the current case context."}
+                </p>
+              </div>
+            </div>
+          </main>
+        </div>
+      </section>
+    );
+  }
 
   const selectedEvidence = evidence.find(
     ([name]) => name === selectedEvidenceName,
@@ -799,25 +602,15 @@ export function InvestigationWorkspace({
         type: selectedEvidence[1],
         collected: selectedEvidence[2],
         size: selectedEvidence[3],
-        source:
-          selectedEvidence[0] === "mimikatz.exe"
-            ? "WIN-10-23-17 / EDR"
-            : selectedEvidence[0] === "memory_dump.raw"
-              ? "WIN-10-23-17"
-              : selectedEvidence[0] === "LSASS_access.evtx"
-                ? "EDR"
-                : "Domain Controller",
+        source: selectedEvent.source,
         hash:
-          selectedEvidence[0] === "mimikatz.exe"
-            ? "2e4d0c8fa91c7e31b5e42f6a0b9c1d5...a91c"
-            : selectedEvidence[0] === "memory_dump.raw"
-              ? "7b2e4a1f9c8d31aa42d8c7e2b6f09e...7a1d"
-              : selectedEvidence[0] === "LSASS_access.evtx"
-                ? "9b7e1c2d4a5f8e6b0c3d1a9f2e7b...31f"
-                : "4c9e8d2a7b1f53d6e4a8c1f9b2d...8e21",
-        custody: `Collected at ${selectedEvidence[2]} from ${selectedEvidence[1]}.`,
+          selectedEvent.entity.details.Hashes
+            ?.replace(/^SHA256=/i, "")
+            .split(",")[0]
+            .trim() || "Not available",
+        custody: `Observed at ${selectedEvidence[2]} from ${selectedEvent.source}.`,
         relatedEvent: selectedEvent.title,
-        relatedEntity: entity.name,
+        relatedEntity: entity?.name ?? "Unknown",
       }
     : null;
 
@@ -885,7 +678,49 @@ export function InvestigationWorkspace({
     return null;
   };
 
-  const confirmFinding = () => {
+  const recordFindingActivity = async ({
+    action,
+    field,
+    oldValue,
+    newValue,
+    detail,
+  }: {
+    action: string;
+    field?: string;
+    oldValue?: string;
+    newValue?: string;
+    detail: string;
+  }) => {
+    const incidentId = caseContext?.sourceIncidentId;
+
+    if (!incidentId) {
+      return;
+    }
+
+    try {
+      await fetch(
+        `/api/incidents/${encodeURIComponent(incidentId)}/activity`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            actor: "Anshuman Pandey",
+            action,
+            field,
+            oldValue,
+            newValue,
+            detail,
+          }),
+        },
+      );
+    } catch {
+      // Keep the investigation usable if audit persistence is temporarily unavailable.
+    }
+  };
+
+  const confirmFinding = async () => {
     const validationError = validateFinding();
 
     if (validationError) {
@@ -893,23 +728,89 @@ export function InvestigationWorkspace({
       return;
     }
 
-    setFindingValidationError(null);
-    setFindingStatus("confirmed");
+    if (!caseContext?.caseId || !draftFinding) {
+      setFindingValidationError("No persisted finding is available to approve.");
+      return;
+    }
 
-    setFindingAuditEvents((current) => [
-      ...current,
-      {
-        id: `finding-confirmed-${Date.now()}`,
-        label: "Finding confirmed",
-        detail:
-          "The finding passed validation and was approved.",
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        tone: "success",
-      },
-    ]);
+    try {
+      const response = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to load persisted finding.");
+      }
+
+      const data = (await response.json()) as {
+        findings?: Array<{ id: string; status: string }>;
+      };
+
+      const finding = data.findings?.[0];
+
+      if (!finding) {
+        throw new Error("No persisted finding was found for this case.");
+      }
+
+      const updateResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings/${encodeURIComponent(finding.id)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "confirmed",
+          }),
+        },
+      );
+
+      const updateData = (await updateResponse.json()) as {
+        error?: string;
+      };
+
+      if (!updateResponse.ok) {
+        throw new Error(
+          updateData.error ?? "Unable to confirm finding.",
+        );
+      }
+
+      await recordFindingActivity({
+        action: "finding_confirmed",
+        field: "finding_status",
+        oldValue: finding.status,
+        newValue: "confirmed",
+        detail: "The finding passed validation and was approved.",
+      });
+
+      setFindingValidationError(null);
+      setFindingStatus("confirmed");
+
+      setFindingAuditEvents((current) => [
+        ...current,
+        {
+          id: `finding-confirmed-${Date.now()}`,
+          label: "Finding confirmed",
+          detail:
+            "The finding passed validation and was approved.",
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          tone: "success",
+        },
+      ]);
+    } catch (error) {
+      setFindingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to confirm finding.",
+      );
+    }
   };
 
   const focusMitreTechnique = (technique: string) => {
@@ -924,7 +825,7 @@ export function InvestigationWorkspace({
     }
   };
 
-  const submitFindingForReview = () => {
+  const submitFindingForReview = async () => {
     const validationError = validateFinding();
 
     if (validationError) {
@@ -932,54 +833,226 @@ export function InvestigationWorkspace({
       return;
     }
 
-    setFindingValidationError(null);
-    setFindingStatus("review");
+    if (!caseContext?.caseId || !draftFinding) {
+      setFindingValidationError("No persisted finding is available for review.");
+      return;
+    }
 
-    setFindingAuditEvents((current) => [
-      ...current,
-      {
-        id: `finding-review-${Date.now()}`,
-        label: "Finding sent for review",
+    try {
+      const response = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to load persisted finding.");
+      }
+
+      const data = (await response.json()) as {
+        findings?: Array<{ id: string; status: string }>;
+      };
+
+      const finding = data.findings?.[0];
+
+      if (!finding) {
+        throw new Error("No persisted finding was found for this case.");
+      }
+
+      const updateResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings/${encodeURIComponent(finding.id)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "review",
+          }),
+        },
+      );
+
+      const updateData = (await updateResponse.json()) as {
+        error?: string;
+      };
+
+      if (!updateResponse.ok) {
+        throw new Error(
+          updateData.error ?? "Unable to submit finding for review.",
+        );
+      }
+
+      await recordFindingActivity({
+        action: "finding_review",
+        field: "finding_status",
+        oldValue: finding.status,
+        newValue: "review",
         detail:
           "The finding passed validation and was submitted for analyst review.",
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        tone: "warning",
-      },
-    ]);
+      });
+
+      setFindingValidationError(null);
+      setFindingStatus("review");
+
+      setFindingAuditEvents((current) => [
+        ...current,
+        {
+          id: `finding-review-${Date.now()}`,
+          label: "Finding sent for review",
+          detail:
+            "The finding passed validation and was submitted for analyst review.",
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          tone: "warning",
+        },
+      ]);
+    } catch (error) {
+      setFindingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to submit finding for review.",
+      );
+    }
   };
 
-  const confirmResponseAction = () => {
+  const confirmResponseAction = async () => {
     if (!confirmAction) return;
 
     const name = confirmAction;
 
-    setActionState((current) => ({
-      ...current,
-      [name]: "running",
-    }));
+    const target =
+      name === "Isolate Host"
+        ? caseContext?.endpoint ?? "Unknown endpoint"
+        : name === "Disable Account"
+          ? entity?.name ?? "Unknown account"
+          : name === "Block IOC"
+            ? iocs[0]?.[0] ?? caseContext?.sourceIp ?? "Unknown IOC"
+            : caseContext?.endpoint ?? "Unknown endpoint";
 
-    setFindingAuditEvents((current) => [
-      ...current,
-      {
-        id: `response-started-${Date.now()}`,
-        label: `${name} started`,
-        detail: `Response action initiated from the investigation console.`,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        tone: "warning",
-      },
-    ]);
+    const description =
+      name === "Isolate Host"
+        ? "Network containment for the affected endpoint."
+        : name === "Disable Account"
+          ? "Suspend the affected account to prevent further authentication."
+          : name === "Block IOC"
+            ? "Block the selected indicator through endpoint and network controls."
+            : "Acquire a forensic memory image from the affected endpoint.";
 
-    window.setTimeout(() => {
+    try {
+      setActionState((current) => ({
+        ...current,
+        [name]: "running",
+      }));
+
+      const createResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            target,
+            description,
+          }),
+        },
+      );
+
+      const createData = (await createResponse.json()) as {
+        action?: {
+          id: string;
+        };
+        error?: string;
+      };
+
+      if (!createResponse.ok || !createData.action?.id) {
+        throw new Error(
+          createData.error ?? "Unable to create response action.",
+        );
+      }
+
+      const actionId = createData.action.id;
+
+      await recordFindingActivity({
+        action: "response_started",
+        field: "response_action",
+        oldValue: "idle",
+        newValue: "running",
+        detail: `${name} started against ${target}.`,
+      });
+
+      setFindingAuditEvents((current) => [
+        ...current,
+        {
+          id: `response-started-${Date.now()}`,
+          label: `${name} started`,
+          detail: `Response action initiated against ${target}.`,
+          time: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          tone: "warning",
+        },
+      ]);
+
+      const runningResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions/${encodeURIComponent(actionId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "running",
+          }),
+        },
+      );
+
+      if (!runningResponse.ok) {
+        throw new Error("Unable to mark response action as running.");
+      }
+
+      const completedResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions/${encodeURIComponent(actionId)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: "succeeded",
+          }),
+        },
+      );
+
+      const completedData = (await completedResponse.json()) as {
+        error?: string;
+      };
+
+      if (!completedResponse.ok) {
+        throw new Error(
+          completedData.error ??
+            "Unable to complete response action.",
+        );
+      }
+
       setActionState((current) => ({
         ...current,
         [name]: "done",
       }));
+
+      await recordFindingActivity({
+        action: "response_completed",
+        field: "response_action",
+        oldValue: "running",
+        newValue: "succeeded",
+        detail: `${name} completed successfully against ${target}.`,
+      });
 
       setFindingAuditEvents((current) => [
         ...current,
@@ -996,7 +1069,18 @@ export function InvestigationWorkspace({
       ]);
 
       setConfirmAction(null);
-    }, 900);
+    } catch (error) {
+      setActionState((current) => ({
+        ...current,
+        [name]: "idle",
+      }));
+
+      setFindingValidationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to execute response action.",
+      );
+    }
   };
 
   return (
@@ -1030,64 +1114,78 @@ export function InvestigationWorkspace({
                 <div className="absolute bottom-3 left-[55px] top-3 w-px bg-[#263441]/70" />
 
                 <div className="space-y-1">
-                {events.map((event) => {
-                  const selected = event.id === selectedId;
+                  {investigationIsLoading ? (
+                    <div className="rounded-lg border border-[#263441] bg-[#10151C] px-3 py-4 text-[10px] text-[#69727E]">
+                      Loading Wazuh events...
+                    </div>
+                  ) : eventsError ? (
+                    <div className="rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.05] px-3 py-4 text-[10px] leading-4 text-[#FF8A96]">
+                      {eventsError}
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="rounded-lg border border-[#263441] bg-[#10151C] px-3 py-4 text-[10px] leading-4 text-[#69727E]">
+                      No correlated Wazuh events were found for this investigation.
+                    </div>
+                  ) : (
+                    events.map((event) => {
+                      const selected = event.id === selectedId;
 
-                  return (
-                    <button
-                      key={event.id}
-                      id={`timeline-event-${event.id}`}
-                      type="button"
-                      onClick={() => selectEvent(event.id)}
-                      className={`relative flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition ${
-                        selected
-                          ? "bg-[#4F8CFF]/[0.07] shadow-[inset_2px_0_0_#4F8CFF,0_0_18px_rgba(77,163,255,0.10)]"
-                          : "hover:bg-white/[0.02]"
-                      }`}
-                    >
-                      <div className="relative z-10 flex w-[42px] shrink-0 justify-center pt-1">
-                        <span
-                          className={`h-2 w-2 rounded-full ring-4 ring-[#08090B] ${
-                            severityDot[event.severity]
-                          }`}
-                        />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-[#8B93A1]">
-                            {event.time}
-                          </span>
-
-                          <span
-                            className={`text-[9px] font-semibold uppercase ${severityClass[event.severity]}`}
-                          >
-                            {event.severity}
-                          </span>
-                        </div>
-
-                        <div
-                          className={`mt-0.5 text-[11px] font-medium ${
-                            selected ? "text-white" : "text-[#C7CDD6]"
+                      return (
+                        <button
+                          key={event.id}
+                          id={`timeline-event-${event.id}`}
+                          type="button"
+                          onClick={() => selectEvent(event.id)}
+                          className={`relative flex w-full items-start gap-3 rounded-lg px-2 py-2 text-left transition ${
+                            selected
+                              ? "bg-[#4F8CFF]/[0.07] shadow-[inset_2px_0_0_#4F8CFF,0_0_18px_rgba(77,163,255,0.10)]"
+                              : "hover:bg-white/[0.02]"
                           }`}
                         >
-                          {event.title}
-                        </div>
+                          <div className="relative z-10 flex w-[42px] shrink-0 justify-center pt-1">
+                            <span
+                              className={`h-2 w-2 rounded-full ring-4 ring-[#08090B] ${
+                                severityDot[event.severity]
+                              }`}
+                            />
+                          </div>
 
-                        <div className="mt-1 text-[11px] leading-4.5 text-[#69727E]">
-                          {event.description}
-                        </div>
-                      </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[10px] text-[#8B93A1]">
+                                {event.time}
+                              </span>
 
-                      {selected && (
-                        <motion.div
-                          layoutId="timeline-active"
-                          className="absolute right-1 top-2 bottom-2 w-0.5 rounded-full bg-[#4F8CFF] shadow-[0_0_10px_rgba(47,129,255,0.75)]"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
+                              <span
+                                className={`text-[9px] font-semibold uppercase ${severityClass[event.severity]}`}
+                              >
+                                {event.severity}
+                              </span>
+                            </div>
+
+                            <div
+                              className={`mt-0.5 text-[11px] font-medium ${
+                                selected ? "text-white" : "text-[#C7CDD6]"
+                              }`}
+                            >
+                              {event.title}
+                            </div>
+
+                            <div className="mt-1 text-[11px] leading-4.5 text-[#69727E]">
+                              {event.description}
+                            </div>
+                          </div>
+
+                          {selected && (
+                            <motion.div
+                              layoutId="timeline-active"
+                              className="absolute right-1 top-2 bottom-2 w-0.5 rounded-full bg-[#4F8CFF] shadow-[0_0_10px_rgba(47,129,255,0.75)]"
+                            />
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -1115,7 +1213,23 @@ export function InvestigationWorkspace({
           </div>
 
           <div className="mt-4 px-3">
-            <CaseLifecycle />
+            <CaseLifecycle
+              status={
+                caseContext?.status === "detected" ||
+                caseContext?.status === "triage" ||
+                caseContext?.status === "investigating" ||
+                caseContext?.status === "confirmed" ||
+                caseContext?.status === "contained" ||
+                caseContext?.status === "eradication" ||
+                caseContext?.status === "recovery" ||
+                caseContext?.status === "closed"
+                  ? caseContext.status
+                  : "investigating"
+              }
+              eventsCount={events.length}
+              evidenceCount={evidence.length}
+              iocCount={iocs.length}
+            />
 </div>
         </aside>
 
@@ -1353,32 +1467,52 @@ export function InvestigationWorkspace({
           />
 
           <InvestigationGraph
+            events={events.map((event) => ({
+              id: event.id,
+              title: event.title,
+              timestamp: event.timestamp,
+              entity: {
+                name: event.entity.name,
+                type: event.entity.type,
+                technique: event.entity.technique,
+              },
+            }))}
             highlightedTechnique={focusedMitreTechnique}
-            onTraceSelect={(title) => {
-              const event = events.find((item) => item.title === title);
-
-              if (event) {
-                setSelectedId(event.id);
+            onTraceSelect={(_, eventId) => {
+              if (eventId) {
+                setSelectedId(eventId);
               }
             }}
             selectedNodeId={
-              entity.name === "mimikatz.exe"
-                ? "malware"
-                : entity.name === "j.smith"
-                  ? "account"
-                  : entity.name === "WIN-10-23-17"
-                    ? "endpoint"
-                    : undefined
+              entity.name
+                ? `${
+                    /process|malware/i.test(entity.type)
+                      ? "malware"
+                      : /user|account/i.test(entity.type)
+                        ? "account"
+                        : /network|ip/i.test(entity.type)
+                          ? "ip"
+                          : "endpoint"
+                  }:${entity.name}`
+                : undefined
             }
             onSelect={(node) => {
-              if (node.id === "malware") {
-                const event = events.find(
-                  (item) => item.title === "Credential Dumping",
-                );
+              const nodeEvent = events.find(
+                (item) =>
+                  item.entity.name === node.label &&
+                  (
+                    /process|malware/i.test(item.entity.type)
+                      ? "malware"
+                      : /user|account/i.test(item.entity.type)
+                        ? "account"
+                        : /network|ip/i.test(item.entity.type)
+                          ? "ip"
+                          : "endpoint"
+                  ) === node.type,
+              );
 
-                if (event) {
-                  setSelectedId(event.id);
-                }
+              if (nodeEvent) {
+                setSelectedId(nodeEvent.id);
               }
 
               if (node.id === "attacker-ip" || node.id === "c2") {
@@ -1419,22 +1553,99 @@ export function InvestigationWorkspace({
                     <>
                       <button
                         type="button"
-                        onClick={() => {
-                        setFindingStatus("draft");
-                        setFindingAuditEvents((current) => [
-                          ...current,
-                          {
-                            id: `finding-reopened-${Date.now()}`,
-                            label: "Finding returned to draft",
+                        onClick={async () => {
+                        if (!caseContext?.caseId) {
+                          setFindingValidationError(
+                            "No case is available for reopening the finding.",
+                          );
+                          return;
+                        }
+
+                        try {
+                          const response = await fetch(
+                            `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings`,
+                            {
+                              method: "GET",
+                              cache: "no-store",
+                            },
+                          );
+
+                          if (!response.ok) {
+                            throw new Error(
+                              "Unable to load persisted finding.",
+                            );
+                          }
+
+                          const data = (await response.json()) as {
+                            findings?: Array<{ id: string }>;
+                          };
+
+                          const finding = data.findings?.[0];
+
+                          if (!finding) {
+                            throw new Error(
+                              "No persisted finding was found for this case.",
+                            );
+                          }
+
+                          const updateResponse = await fetch(
+                            `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings/${encodeURIComponent(finding.id)}`,
+                            {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                status: "draft",
+                              }),
+                            },
+                          );
+
+                          const updateData =
+                            (await updateResponse.json()) as {
+                              error?: string;
+                            };
+
+                          if (!updateResponse.ok) {
+                            throw new Error(
+                              updateData.error ??
+                                "Unable to reopen finding.",
+                            );
+                          }
+
+                          await recordFindingActivity({
+                            action: "finding_reopened",
+                            field: "finding_status",
+                            oldValue: "confirmed",
+                            newValue: "draft",
                             detail:
                               "The finding was reopened for additional analyst review.",
-                            time: new Date().toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }),
-                            tone: "info",
-                          },
-                        ]);
+                          });
+
+                          setFindingValidationError(null);
+                          setFindingStatus("draft");
+
+                          setFindingAuditEvents((current) => [
+                            ...current,
+                            {
+                              id: `finding-reopened-${Date.now()}`,
+                              label: "Finding returned to draft",
+                              detail:
+                                "The finding was reopened for additional analyst review.",
+                              time: new Date().toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }),
+                              tone: "info",
+                            },
+                          ]);
+                        } catch (error) {
+                          setFindingValidationError(
+                            error instanceof Error
+                              ? error.message
+                              : "Unable to reopen finding.",
+                          );
+                        }
                       }}
                         className="rounded-lg border border-[#263441] px-3 py-1.5 text-[9px] text-[#A7AFBA] transition hover:border-[#3A4652] hover:text-white"
                       >
@@ -1455,6 +1666,15 @@ export function InvestigationWorkspace({
                     <button
                       type="button"
                       onClick={() => {
+                        void recordFindingActivity({
+                          action: "finding_reopened",
+                          field: "finding_status",
+                          oldValue: "confirmed",
+                          newValue: "draft",
+                          detail:
+                            "The finding was reopened for additional analyst review.",
+                        });
+
                         setFindingStatus("draft");
                         setFindingAuditEvents((current) => [
                           ...current,
@@ -1849,33 +2069,25 @@ export function InvestigationWorkspace({
                     key={value}
                     type="button"
                     onClick={() => {
-                      const normalizedValue = value.toLowerCase();
+                      const artifact = investigationArtifacts.find(
+                        (item) =>
+                          item.type === "ioc" &&
+                          item.value === value,
+                      );
 
-                      const exactMatch = events.find((event) => {
-                        const searchable = [
-                          event.title,
-                          event.source,
-                          event.entity.name,
-                          ...Object.values(event.entity.details),
-                        ]
-                          .join(" ")
-                          .toLowerCase();
+                      if (artifact?.sourceEventId) {
+                        setSelectedId(artifact.sourceEventId);
 
-                        return searchable.includes(normalizedValue);
-                      });
-
-                      const networkEvent =
-                        exactMatch ??
-                        events.find(
-                          (event) =>
-                            event.entity.name === value ||
-                            /network|connection|external|ip/i.test(
-                              `${event.title} ${event.source}`,
-                            ),
-                        );
-
-                      if (networkEvent) {
-                        setSelectedId(networkEvent.id);
+                        window.requestAnimationFrame(() => {
+                          document
+                            .getElementById(
+                              `timeline-event-${artifact.sourceEventId}`,
+                            )
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "nearest",
+                            });
+                        });
                       }
                     }}
                     className="flex w-full items-center gap-2.5 rounded-lg border border-transparent px-1 py-2 text-left transition hover:border-[#1B2430] hover:bg-white/[0.018]"
@@ -1919,6 +2131,16 @@ export function InvestigationWorkspace({
               <div className="mt-1 text-[10px] text-[#66717D]">
                 Controlled containment actions
               </div>
+
+              <button
+                type="button"
+                onClick={() => setPlaybookOpen(true)}
+                disabled={playbookRunning}
+                className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#7C6CFF]/25 bg-[#7C6CFF]/[0.06] px-2.5 py-1.5 text-[8px] font-medium text-[#B8B1FF] transition hover:border-[#7C6CFF]/45 hover:bg-[#7C6CFF]/[0.1] disabled:cursor-wait disabled:opacity-60"
+              >
+                <ShieldCheck className="h-3 w-3" />
+                {playbookRunning ? "Playbook Running" : "Run Playbook"}
+              </button>
             </div>
           </div>
 
@@ -2052,13 +2274,129 @@ export function InvestigationWorkspace({
         steps={playbookSteps}
         running={playbookRunning}
         completed={playbookCompleted}
-        onStart={() => {
-          setPlaybookRunning(true);
+        onStart={async () => {
+          if (!caseContext?.caseId) {
+            setFindingValidationError(
+              "Playbook cannot start without an active case.",
+            );
+            return;
+          }
 
-          window.setTimeout(() => {
+          try {
+            setFindingValidationError(null);
+            setPlaybookRunning(true);
+            setPlaybookCompleted(false);
+
+            const createResponse = await fetch(
+              `/api/cases/${encodeURIComponent(caseContext.caseId)}/playbooks`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  name: "Credential Theft Containment",
+                  description:
+                    "Automated containment sequence for the active credential-theft investigation.",
+                  steps: playbookSteps.map((step) => ({
+                    id: step.id,
+                    title: step.title,
+                    description: step.description,
+                  })),
+                }),
+              },
+            );
+
+            const createData = (await createResponse.json()) as {
+              run?: { id: string };
+              error?: string;
+            };
+
+            if (!createResponse.ok || !createData.run?.id) {
+              throw new Error(
+                createData.error ?? "Unable to start playbook.",
+              );
+            }
+
+            const runId = createData.run.id;
+
+            const runUrl =
+              `/api/cases/${encodeURIComponent(caseContext.caseId)}/playbooks/${encodeURIComponent(runId)}`;
+
+            const runningResponse = await fetch(runUrl, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                status: "running",
+              }),
+            });
+
+            if (!runningResponse.ok) {
+              throw new Error("Unable to mark playbook as running.");
+            }
+
+            for (const step of playbookSteps) {
+              const stepResponse = await fetch(runUrl, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  stepId: step.id,
+                  stepStatus: "completed",
+                }),
+              });
+
+              if (!stepResponse.ok) {
+                throw new Error(
+                  `Unable to complete playbook step: ${step.title}.`,
+                );
+              }
+            }
+
+            const completedResponse = await fetch(runUrl, {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                status: "completed",
+              }),
+            });
+
+            const completedData = (await completedResponse.json()) as {
+              error?: string;
+            };
+
+            if (!completedResponse.ok) {
+              throw new Error(
+                completedData.error ??
+                  "Unable to complete playbook.",
+              );
+            }
+
+            await recordFindingActivity({
+              action: "playbook_completed",
+              field: "playbook_status",
+              oldValue: "running",
+              newValue: "completed",
+              detail:
+                "Credential Theft Containment completed successfully.",
+            });
+
             setPlaybookRunning(false);
             setPlaybookCompleted(true);
-          }, 2200);
+          } catch (error) {
+            setPlaybookRunning(false);
+            setPlaybookCompleted(false);
+            setFindingValidationError(
+              error instanceof Error
+                ? error.message
+                : "Unable to execute playbook.",
+            );
+          }
         }}
         onClose={() => setPlaybookOpen(false)}
       />
@@ -2073,38 +2411,98 @@ export function InvestigationWorkspace({
         }))}
         entities={[
           {
-            name: "mimikatz.exe",
-            type: "Process",
-            risk: 98,
+            name: entity?.name ?? "Unknown",
+            type: entity?.type ?? "Unknown",
+            risk: entity?.risk ?? 0,
           },
-          {
-            name: "j.smith",
-            type: "User",
-            risk: 74,
-          },
-          {
-            name: "WIN-10-23-17",
-            type: "Endpoint",
-            risk: 93,
-          },
+          ...(caseContext?.endpoint && caseContext.endpoint !== entity?.name
+            ? [
+                {
+                  name: caseContext.endpoint,
+                  type: "Endpoint",
+                  risk: 50,
+                },
+              ]
+            : []),
         ]}
         onClose={() => setFindingBuilderOpen(false)}
-        onSave={(finding) => {
-          setDraftFinding(finding);
-          setFindingStatus("draft");
-          setFindingAuditEvents([
-            {
-              id: `finding-created-${Date.now()}`,
-              label: "Finding created",
+        onSave={async (finding) => {
+          if (!caseContext?.caseId) {
+            setFindingValidationError(
+              "Finding cannot be saved without a case.",
+            );
+            return;
+          }
+
+          try {
+            const response = await fetch(
+              `/api/cases/${encodeURIComponent(caseContext.caseId)}/findings`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  title: finding.title,
+                  description: finding.description,
+                  severity: finding.severity,
+                  confidence: finding.confidence,
+                  technique: finding.technique ?? "",
+                  evidenceIds: finding.evidence,
+                  entityIds: finding.entities,
+                  eventIds: selectedEvent ? [selectedEvent.id] : [],
+                  status: "draft",
+                  author: "Anshuman Pandey",
+                }),
+              },
+            );
+
+            const data = (await response.json()) as {
+              finding?: {
+                id?: string;
+              };
+              error?: string;
+            };
+
+            if (!response.ok) {
+              throw new Error(
+                data.error ?? "Unable to save finding.",
+              );
+            }
+
+            await recordFindingActivity({
+              action: "finding_created",
+              field: "finding_status",
+              oldValue: "none",
+              newValue: "draft",
               detail: `${finding.title} was saved as a draft.`,
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              tone: "info",
-            },
-          ]);
-          setFindingBuilderOpen(false);
+            });
+
+            setDraftFinding(finding);
+            setFindingStatus("draft");
+            setFindingValidationError(null);
+
+            setFindingAuditEvents([
+              {
+                id: `finding-created-${Date.now()}`,
+                label: "Finding created",
+                detail: `${finding.title} was saved as a draft.`,
+                time: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                tone: "info",
+              },
+            ]);
+
+            setFindingBuilderOpen(false);
+          } catch (error) {
+            setFindingValidationError(
+              error instanceof Error
+                ? error.message
+                : "Unable to save finding.",
+            );
+          }
         }}
       />
       </div>

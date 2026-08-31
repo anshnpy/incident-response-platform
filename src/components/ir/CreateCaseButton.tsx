@@ -26,25 +26,10 @@ export function CreateCaseButton({
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
 
-  function createCase() {
+  async function createCase() {
     setCreating(true);
 
     try {
-      const rawCases = window.localStorage.getItem("ir-cases");
-      const existingCases = rawCases
-        ? (JSON.parse(rawCases) as Array<{ id?: string }>)
-        : [];
-
-      const existingIds = existingCases
-        .map((item) => item.id ?? "")
-        .map((id) => Number(id.replace("IR-", "")))
-        .filter((value) => Number.isFinite(value));
-
-      const nextNumber =
-        Math.max(2048, ...existingIds) + 1;
-
-      const caseId = `IR-${nextNumber}`;
-
       const severity =
         incident.severity.toLowerCase() === "critical"
           ? "critical"
@@ -63,9 +48,12 @@ export function CreateCaseButton({
               ? 60
               : 35;
 
+      const caseId = `IR-${Date.now()}`;
+
       const createdCase = {
         id: caseId,
         title: incident.title,
+        description: `Investigation case created from Wazuh incident ${incident.id}.`,
         severity,
         status: "investigating",
         phase: incident.technique ?? "Detection",
@@ -79,19 +67,35 @@ export function CreateCaseButton({
         sourceIp: incident.source,
         technique: incident.technique,
         occurrences: incident.occurrences,
+        createdBy: "Anshuman Pandey",
       };
 
-      window.localStorage.setItem(
-        "ir-cases",
-        JSON.stringify([...existingCases, createdCase]),
-      );
+      const response = await fetch("/api/cases", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(createdCase),
+      });
+
+      const data = (await response.json()) as {
+        case?: { id?: string };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to create case.");
+      }
+
+      const savedCaseId = data.case?.id ?? caseId;
 
       setCreated(true);
 
       window.setTimeout(() => {
-        router.push(`/cases/${caseId}`);
+        router.push(`/cases/${encodeURIComponent(savedCaseId)}`);
       }, 250);
-    } catch {
+    } catch (error) {
+      console.error("Case creation failed:", error);
       setCreating(false);
       setCreated(false);
     }

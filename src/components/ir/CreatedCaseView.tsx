@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { InvestigationShell } from "@/components/ir/InvestigationShell";
 
@@ -32,24 +32,74 @@ const severityClass = {
 };
 
 export function CreatedCaseView({ caseId }: { caseId: string }) {
-  const [caseData] = useState<CreatedCase | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
+  const [caseData, setCaseData] = useState<CreatedCase | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCase() {
+      try {
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseId)}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const data = (await response.json()) as {
+          case?: CreatedCase;
+          error?: string;
+        };
+
+        if (!response.ok || !data.case) {
+          throw new Error(data.error ?? "Case not found.");
+        }
+
+        if (!cancelled) {
+          setCaseData(data.case);
+          setLoadError(null);
+          setLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load case.",
+          );
+          setLoading(false);
+        }
+      }
     }
 
-    const raw = window.localStorage.getItem("ir-cases");
+    void loadCase();
 
-    if (!raw) {
-      return null;
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
 
-    try {
-      const cases = JSON.parse(raw) as CreatedCase[];
-      return cases.find((item) => item.id === caseId) ?? null;
-    } catch {
-      return null;
-    }
-  });
+  if (loading) {
+    return (
+      <InvestigationShell>
+        <div className="rounded-2xl border border-[#263441] bg-[#0B1016] p-6">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#59616D]">
+            Case
+          </div>
+
+          <h1 className="mt-2 text-[22px] font-semibold text-[#E7ECF2]">
+            Loading case...
+          </h1>
+
+          <p className="mt-1.5 text-[11px] text-[#7E8794]">
+            Loading persistent case data from the investigation database.
+          </p>
+        </div>
+      </InvestigationShell>
+    );
+  }
 
   if (!caseData) {
     return (
@@ -64,7 +114,7 @@ export function CreatedCaseView({ caseId }: { caseId: string }) {
           </h1>
 
           <p className="mt-1.5 text-[11px] text-[#7E8794]">
-            This browser does not contain a saved case with ID {caseId}.
+            {loadError ?? `No case exists with ID ${caseId}.`}
           </p>
 
           <Link

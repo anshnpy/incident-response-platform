@@ -5,9 +5,16 @@ export const dynamic = "force-dynamic";
 const SOC_LAB_API =
   "https://soc-home-lab.anshn-py.workers.dev/api/wazuh/alerts";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const response = await fetch(SOC_LAB_API, {
+    const upstreamUrl = new URL(SOC_LAB_API);
+    const incomingUrl = new URL(request.url);
+
+    incomingUrl.searchParams.forEach((value, key) => {
+      upstreamUrl.searchParams.set(key, value);
+    });
+
+    const response = await fetch(upstreamUrl.toString(), {
       cache: "no-store",
     });
 

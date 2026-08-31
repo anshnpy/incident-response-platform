@@ -130,6 +130,11 @@ export function InvestigationShell({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeCase, setActiveCase] = useState<{
+    id: string;
+    title: string;
+    riskScore: number;
+  } | null>(null);
 
   useEffect(() => {
     const handleGlobalShortcut = (event: KeyboardEvent) => {
@@ -145,6 +150,58 @@ export function InvestigationShell({
       window.removeEventListener("keydown", handleGlobalShortcut);
     };
   }, []);
+
+  const activeCaseId = pathname.match(/^\/cases\/([^/]+)/)?.[1] ?? null;
+
+  useEffect(() => {
+    if (!activeCaseId) {
+      return;
+    }
+
+    const caseId = decodeURIComponent(activeCaseId);
+    let cancelled = false;
+
+    async function loadActiveCase() {
+      try {
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseId)}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load active case.");
+        }
+
+        const data = (await response.json()) as {
+          case?: {
+            id: string;
+            title: string;
+            riskScore: number;
+          };
+        };
+
+        if (!cancelled && data.case) {
+          setActiveCase({
+            id: data.case.id,
+            title: data.case.title,
+            riskScore: data.case.riskScore,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          // Leave the current case unchanged when a background refresh fails.
+        }
+      }
+    }
+
+    void loadActiveCase();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCaseId]);
 
   const commandItems = [
     {
@@ -438,9 +495,9 @@ export function InvestigationShell({
                   AP
                 </div>
               </div>
-            ) : (
+            ) : activeCase ? (
               <Link
-                href="/cases/IR-2048"
+                href={`/cases/${encodeURIComponent(activeCase.id)}`}
                 onClick={() => setMobileOpen(false)}
                 className="group block rounded-xl border border-[#263441] bg-[#0B0E12] p-3 transition hover:border-[#4F8CFF]/25 hover:bg-[#0D1218]"
               >
@@ -456,11 +513,11 @@ export function InvestigationShell({
                 </div>
 
                 <div className="font-mono text-[15px] font-semibold tracking-tight text-[#E7ECF2]">
-                  IR-2048
+                  {activeCase.id}
                 </div>
 
-                <div className="mt-1 text-[12px] leading-5 text-[#9AA6B2]">
-                  Credential Theft Investigation
+                <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#9AA6B2]">
+                  {activeCase.title}
                 </div>
 
                 <div className="mt-3 flex items-center justify-between border-t border-[#263441] pt-3">
@@ -469,10 +526,20 @@ export function InvestigationShell({
                   </span>
 
                   <span className="text-[13px] font-semibold text-[#FF4D67] transition group-hover:text-[#FF657B]">
-                    93 / 100
+                    {activeCase.riskScore} / 100
                   </span>
                 </div>
               </Link>
+            ) : (
+              <div className="rounded-xl border border-[#263441] bg-[#0B0E12] p-3">
+                <div className="text-[10px] font-medium tracking-[0.1em] text-[#69727E]">
+                  ACTIVE CASE
+                </div>
+
+                <div className="mt-2 text-[11px] text-[#596674]">
+                  No active case selected.
+                </div>
+              </div>
             )}
           </div>
         </aside>

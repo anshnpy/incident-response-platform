@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { InvestigationShell } from "@/components/ir/InvestigationShell";
 import { InvestigationWorkspace } from "@/components/ir/InvestigationWorkspace";
@@ -30,24 +30,74 @@ export function CreatedCaseInvestigation({
 }: {
   caseId: string;
 }) {
-  const [caseData] = useState<CreatedCase | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
+  const [caseData, setCaseData] = useState<CreatedCase | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCase() {
+      try {
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseId)}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const data = (await response.json()) as {
+          case?: CreatedCase;
+          error?: string;
+        };
+
+        if (!response.ok || !data.case) {
+          throw new Error(data.error ?? "Case not found.");
+        }
+
+        if (!cancelled) {
+          setCaseData(data.case);
+          setLoadError(null);
+          setLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load case.",
+          );
+          setLoading(false);
+        }
+      }
     }
 
-    const raw = window.localStorage.getItem("ir-cases");
+    void loadCase();
 
-    if (!raw) {
-      return null;
-    }
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
 
-    try {
-      const cases = JSON.parse(raw) as CreatedCase[];
-      return cases.find((item) => item.id === caseId) ?? null;
-    } catch {
-      return null;
-    }
-  });
+  if (loading) {
+    return (
+      <InvestigationShell>
+        <section className="rounded-2xl border border-[#263441] bg-[#0B1016] p-6">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#59616D]">
+            Investigation
+          </div>
+
+          <h1 className="mt-2 text-[22px] font-semibold text-[#E7ECF2]">
+            Loading case...
+          </h1>
+
+          <p className="mt-1.5 text-[11px] text-[#7E8794]">
+            Loading persistent case data.
+          </p>
+        </section>
+      </InvestigationShell>
+    );
+  }
 
   if (!caseData) {
     return (
@@ -62,7 +112,7 @@ export function CreatedCaseInvestigation({
           </h1>
 
           <p className="mt-1.5 text-[11px] text-[#7E8794]">
-            No saved investigation case was found for {caseId}.
+            {loadError ?? `No investigation case was found for ${caseId}.`}
           </p>
 
           <Link
@@ -141,12 +191,14 @@ export function CreatedCaseInvestigation({
           initialEventId={initialEventId}
           caseContext={{
             caseId: caseData.id,
+            sourceIncidentId: caseData.sourceIncidentId,
             sourceIp: caseData.sourceIp,
             endpoint: caseData.affectedEndpoint,
             technique: caseData.technique,
             title: caseData.title,
             firstSeen: caseData.startedAt,
             lastSeen: caseData.updatedAt,
+            status: caseData.status,
           }}
         />
       </div>
