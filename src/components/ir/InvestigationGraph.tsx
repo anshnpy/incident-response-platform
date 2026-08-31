@@ -35,6 +35,33 @@ interface InvestigationGraphProps {
   onTraceSelect?: (title: string, eventId?: string) => void;
 }
 
+function getNodeType(type: string): GraphNode["type"] {
+  const normalized = type.toLowerCase();
+
+  if (
+    normalized.includes("process") ||
+    normalized.includes("malware")
+  ) {
+    return "malware";
+  }
+
+  if (
+    normalized.includes("user") ||
+    normalized.includes("account")
+  ) {
+    return "account";
+  }
+
+  if (
+    normalized.includes("network") ||
+    normalized.includes("ip")
+  ) {
+    return "ip";
+  }
+
+  return "endpoint";
+}
+
 const nodeStyles = {
   ip: {
     icon: Globe2,
@@ -79,16 +106,7 @@ export function InvestigationGraph({
             event.entity.name !== "Unknown",
         )
         .map((event) => {
-          const type = event.entity.type.toLowerCase();
-
-          const nodeType: GraphNode["type"] =
-            type.includes("process") || type.includes("malware")
-              ? "malware"
-              : type.includes("user") || type.includes("account")
-                ? "account"
-                : type.includes("network") || type.includes("ip")
-                  ? "ip"
-                  : "endpoint";
+          const nodeType = getNodeType(event.entity.type);
 
           return [
             `${nodeType}:${event.entity.name}`,
@@ -140,6 +158,65 @@ export function InvestigationGraph({
       .map((event) => event.entity.technique),
   );
 
+  const graphRelationships = graphEvents
+    .map((event, index) => {
+      const nextEvent = graphEvents[index + 1];
+
+      if (!nextEvent || event.entity.name === nextEvent.entity.name) {
+        return null;
+      }
+
+      const fromType = getNodeType(event.entity.type);
+      const toType = getNodeType(nextEvent.entity.type);
+
+      const relationship =
+        fromType === "ip" && toType === "endpoint"
+          ? "connected-to"
+          : fromType === "endpoint" && toType === "malware"
+            ? "executed-by"
+            : fromType === "endpoint" && toType === "account"
+              ? "associated-with"
+              : fromType === "account" && toType === "endpoint"
+                ? "associated-with"
+                : fromType === "ip" && toType === "c2"
+                  ? "connected-to"
+                  : "observed-with";
+
+      return {
+        from: `${fromType}:${event.entity.name}`,
+        to: `${toType}:${nextEvent.entity.name}`,
+        eventId: event.id,
+        nextEventId: nextEvent.id,
+        relationship,
+      };
+    })
+    .filter(
+      (
+        relationship,
+      ): relationship is {
+        from: string;
+        to: string;
+        eventId: string;
+        nextEventId: string;
+        relationship: string;
+      } => Boolean(relationship),
+    );
+
+  const relationshipByPair = new Map(
+    graphRelationships.map((relationship) => [
+      `${relationship.from}->${relationship.to}`,
+      relationship.relationship,
+    ]),
+  );
+
+  const getVisibleRelationship = (
+    fromNode: GraphNode,
+    toNode: GraphNode,
+  ) =>
+    relationshipByPair.get(
+      `${fromNode.id}->${toNode.id}`,
+    ) ?? "observed-with";
+
   const selectedIndex = nodes.findIndex(
     (node) => node.id === selectedNodeId,
   );
@@ -163,7 +240,7 @@ export function InvestigationGraph({
           </span>
 
           <span className="font-mono text-[9px] text-[#66717D]">
-            {Math.max(nodes.length - 1, 0)} links
+            {graphRelationships.length} links
           </span>
         </div>
       </div>
@@ -275,7 +352,7 @@ export function InvestigationGraph({
                 </motion.button>
 
                 {index < nodes.length - 1 && (
-                  <div className="relative w-8 shrink-0">
+                  <div className="relative w-12 shrink-0">
                     <motion.div
                       initial={{ scaleX: 0 }}
                       animate={{ scaleX: connected ? 1 : 0.65 }}
@@ -290,6 +367,19 @@ export function InvestigationGraph({
                           : "bg-[#1B2430]"
                       }`}
                     />
+
+                    <span
+                      className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[165%] whitespace-nowrap text-[6px] font-medium uppercase tracking-[0.06em] ${
+                        connected
+                          ? "text-[#59616D]"
+                          : "text-[#3A4652]"
+                      }`}
+                    >
+                      {getVisibleRelationship(
+                        node,
+                        nodes[index + 1],
+                      )}
+                    </span>
 
                     <ArrowRight
                       className={`absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 translate-x-1/2 ${

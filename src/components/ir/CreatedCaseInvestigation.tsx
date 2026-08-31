@@ -199,6 +199,7 @@ export function CreatedCaseInvestigation({
             firstSeen: caseData.startedAt,
             lastSeen: caseData.updatedAt,
             status: caseData.status,
+            riskScore: caseData.riskScore,
           }}
         />
       </div>

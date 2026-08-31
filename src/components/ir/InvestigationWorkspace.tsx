@@ -10,7 +10,9 @@ import { FindingBuilder } from "@/components/ir/FindingBuilder";
 import { FindingStatusBadge } from "@/components/ir/FindingStatusBadge";
 import { FindingAuditTrail } from "@/components/ir/FindingAuditTrail";
 import { InvestigationGraph } from "@/components/ir/InvestigationGraph";
+import { InvestigationSkeleton } from "@/components/ir/InvestigationSkeleton";
 import { RiskEngine } from "@/components/ir/RiskEngine";
+import { InvestigationNarrative } from "@/components/ir/InvestigationNarrative";
 import { EventCorrelationPanel } from "@/components/ir/EventCorrelationPanel";
 import {
   extractInvestigationArtifacts,
@@ -107,6 +109,7 @@ interface InvestigationWorkspaceProps {
     title?: string;
     firstSeen?: string;
     lastSeen?: string;
+    riskScore?: number;
   };
 }
 
@@ -127,6 +130,8 @@ export function InvestigationWorkspace({
     firstSeen: caseContext?.firstSeen ?? null,
     lastSeen: caseContext?.lastSeen ?? null,
   });
+
+  const [retryToken] = useState(0);
 
   const investigationIsLoading =
     loadedRequestKey !== investigationRequestKey;
@@ -230,6 +235,7 @@ export function InvestigationWorkspace({
     caseContext?.title,
     caseContext?.firstSeen,
     caseContext?.lastSeen,
+    retryToken,
   ]);
 
   const events = useMemo(
@@ -346,6 +352,19 @@ export function InvestigationWorkspace({
   const [findingStatus, setFindingStatus] = useState<
     "draft" | "review" | "confirmed"
   >("confirmed");
+  const [persistedActivity, setPersistedActivity] = useState<
+    Array<{
+      id: string;
+      actor: string;
+      action: string;
+      field: string | null;
+      oldValue: string | null;
+      newValue: string | null;
+      detail: string | null;
+      createdAt: string;
+    }>
+  >([]);
+
   const [findingAuditEvents, setFindingAuditEvents] = useState<
     Array<{
       id: string;
@@ -465,6 +484,8 @@ export function InvestigationWorkspace({
             }>;
           };
 
+          setPersistedActivity(activityData.activity ?? []);
+
           const findingActivities = (activityData.activity ?? []).filter(
             (activity) =>
               activity.action.startsWith("finding_") ||
@@ -502,12 +523,14 @@ export function InvestigationWorkspace({
             })),
           );
         } else {
+          setPersistedActivity([]);
           setFindingAuditEvents([]);
         }
       })
       .catch(() => {
-        // Keep the investigation usable even if persisted findings
-        // are temporarily unavailable.
+        setPersistedActivity([]);
+        // Keep the investigation usable even if persisted activity
+        // is temporarily unavailable.
       });
 
     return () => {
@@ -535,6 +558,142 @@ export function InvestigationWorkspace({
     ? events.filter((event) => event.id !== selectedEvent.id).slice(0, 4)
     : [];
 
+  const riskMetrics = useMemo(() => {
+    const severityWeights: Record<string, number> = {
+      critical: 25,
+      high: 18,
+      medium: 10,
+      low: 4,
+    };
+
+    const uniqueTechniques = new Set(
+      events
+        .map((event) => event.entity.technique)
+        .filter((technique): technique is string => Boolean(technique)),
+    ).size;
+
+    const maliciousEntities = events.filter(
+      (event) => event.entity.verdict === "malicious",
+    ).length;
+
+    const suspiciousEntities = events.filter(
+      (event) => event.entity.verdict === "suspicious",
+    ).length;
+
+    const networkEvents = events.filter((event) =>
+      /network|connection|external|lateral|remote|ip/i.test(
+        `${event.title} ${event.source} ${event.entity.type}`,
+      ),
+    ).length;
+
+    const privilegeEvents = events.filter((event) =>
+      /admin|administrator|privilege|elevat|credential|root|system/i.test(
+        `${event.title} ${event.description} ${Object.values(event.entity.details).join(" ")}`,
+      ),
+    ).length;
+
+    const evidenceCount = investigationArtifacts.filter(
+      (artifact) => artifact.type === "evidence",
+    ).length;
+
+    const maxEventRisk = events.reduce(
+      (max, event) => Math.max(max, event.entity.risk),
+      0,
+    );
+
+    const severityContribution = events.reduce(
+      (total, event) =>
+        total + (severityWeights[event.severity] ?? 0),
+      0,
+    );
+
+    const baseScore = Math.min(
+      60,
+      Math.max(
+        10,
+        Math.round(
+          maxEventRisk * 0.55 +
+            Math.min(severityContribution, 60) * 0.25 +
+            Math.min(events.length * 2, 30) * 0.2,
+        ),
+      ),
+    );
+
+    return {
+      baseScore,
+      assetCriticality: caseContext?.endpoint ? 15 : 5,
+      iocReputation: Math.min(
+        20,
+        maliciousEntities * 8 + suspiciousEntities * 4,
+      ),
+      privilegeLevel: Math.min(15, privilegeEvents * 5),
+      mitreTechniques: Math.min(20, uniqueTechniques * 4),
+      lateralMovement: Math.min(15, networkEvents * 3),
+      dataAccess: Math.min(10, evidenceCount * 2),
+      maxEventRisk,
+      uniqueTechniques,
+      maliciousEntities,
+      suspiciousEntities,
+      networkEvents,
+      privilegeEvents,
+      evidenceCount,
+    };
+  }, [caseContext?.endpoint, events, investigationArtifacts]);
+
+  const calculatedRiskScore = Math.min(
+    100,
+    Math.max(
+      0,
+      riskMetrics.baseScore +
+        riskMetrics.iocReputation +
+        riskMetrics.privilegeLevel +
+        riskMetrics.mitreTechniques +
+        riskMetrics.lateralMovement +
+        riskMetrics.dataAccess,
+    ),
+  );
+
+  useEffect(() => {
+    if (!caseContext?.caseId || events.length === 0) {
+      return;
+    }
+
+    const currentPersistedScore = Number(caseContext.riskScore ?? 0);
+
+    if (currentPersistedScore === calculatedRiskScore) {
+      return;
+    }
+
+    fetch(
+      `/api/cases/${encodeURIComponent(caseContext.caseId)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          riskScore: calculatedRiskScore,
+        }),
+      },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error("Unable to persist calculated risk score.");
+        }
+
+        return response.json();
+      })
+      .catch(() => {
+        // Keep the live risk calculation usable even if persistence fails.
+      });
+
+  }, [
+    caseContext?.caseId,
+    caseContext?.riskScore,
+    calculatedRiskScore,
+    events.length,
+  ]);
+
   if (!selectedEvent) {
     return (
       <section className="ir-console overflow-hidden rounded-2xl border border-[#263441] bg-[#08090B]">
@@ -551,9 +710,7 @@ export function InvestigationWorkspace({
 
             <div className="px-3 py-4">
               {investigationIsLoading ? (
-                <div className="rounded-lg border border-[#263441] bg-[#10151C] px-3 py-4 text-[10px] text-[#69727E]">
-                  Loading Wazuh events...
-                </div>
+                <InvestigationSkeleton />
               ) : eventsError ? (
                 <div className="rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.05] px-3 py-4 text-[10px] leading-4 text-[#FF8A96]">
                   {eventsError}
@@ -616,6 +773,9 @@ export function InvestigationWorkspace({
 
   const selectedResponseAction =
     responseActions.find(([name]) => name === confirmAction) ?? null;
+
+  const narrativeSeverity = selectedEvent.severity;
+
 
   const playbookSteps = [
     {
@@ -1085,6 +1245,44 @@ export function InvestigationWorkspace({
 
   return (
     <section className="ir-console overflow-hidden rounded-2xl border border-[#263441] bg-[#08090B]">
+      <InvestigationNarrative
+        caseTitle={caseContext?.title ?? "Active investigation"}
+        caseStatus={caseContext?.status}
+        severity={narrativeSeverity}
+        selectedEvent={{
+          title: selectedEvent.title,
+          description: selectedEvent.description,
+          source: selectedEvent.source,
+          timestamp: selectedEvent.timestamp,
+          entity: {
+            name: selectedEvent.entity.name,
+            type: selectedEvent.entity.type,
+            technique: selectedEvent.entity.technique,
+          },
+        }}
+        eventCount={events.length}
+        evidenceCount={evidence.length}
+        finding={
+          draftFinding
+            ? {
+                title: draftFinding.title,
+                description: draftFinding.description,
+                confidence: draftFinding.confidence,
+                status: findingStatus,
+                technique: draftFinding.technique,
+              }
+            : null
+        }
+        responseState={
+          Object.values(actionState).some((state) => state === "running")
+            ? "running"
+            : Object.values(actionState).some((state) => state === "done")
+              ? "completed"
+              : "idle"
+        }
+        activity={persistedActivity}
+      />
+
       <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[235px_minmax(0,1fr)_300px]">
         <aside className="border-b border-[#263441]/70 xl:border-b-0 xl:border-r">
           <div className="border-b border-[#263441]/70 px-5 py-4">
@@ -1514,16 +1712,6 @@ export function InvestigationWorkspace({
               if (nodeEvent) {
                 setSelectedId(nodeEvent.id);
               }
-
-              if (node.id === "attacker-ip" || node.id === "c2") {
-                const event = events.find(
-                  (item) => item.title === "External Connection",
-                );
-
-                if (event) {
-                  setSelectedId(event.id);
-                }
-              }
             }}
           />
 
@@ -1868,7 +2056,18 @@ export function InvestigationWorkspace({
                   </div>
 
                   <div className="mt-0.5 text-[16px] font-semibold text-[#FF5364]">
-                    {entity.risk}
+                    {Math.min(
+                      100,
+                      Math.max(
+                        0,
+                        riskMetrics.baseScore +
+                          riskMetrics.iocReputation +
+                          riskMetrics.privilegeLevel +
+                          riskMetrics.mitreTechniques +
+                          riskMetrics.lateralMovement +
+                          riskMetrics.dataAccess,
+                      ),
+                    )}
                   </div>
                 </div>
               </div>
@@ -1887,55 +2086,72 @@ export function InvestigationWorkspace({
                 </div>
 
                 <span className="rounded-md border border-[#FFB84D]/20 bg-[#FFB84D]/[0.04] px-2 py-1 text-[8px] font-medium text-[#FFB84D]">
-                  {entity.risk >= 90
-                    ? "CRITICAL"
-                    : entity.risk >= 70
-                      ? "HIGH"
-                      : entity.risk >= 40
-                        ? "MEDIUM"
-                        : "LOW"}
+                  {(() => {
+                    const score = Math.min(
+                      100,
+                      Math.max(
+                        0,
+                        riskMetrics.baseScore +
+                          riskMetrics.iocReputation +
+                          riskMetrics.privilegeLevel +
+                          riskMetrics.mitreTechniques +
+                          riskMetrics.lateralMovement +
+                          riskMetrics.dataAccess,
+                      ),
+                    );
+
+                    return score >= 90
+                      ? "CRITICAL"
+                      : score >= 70
+                        ? "HIGH"
+                        : score >= 40
+                          ? "MEDIUM"
+                          : "LOW";
+                  })()}
                 </span>
               </summary>
 
               <div className="mt-4">
                 <RiskEngine
-                  score={entity.risk}
+                  score={riskMetrics.baseScore}
                   factors={[
                     {
                       label: "Asset Criticality",
-                      value: 25,
+                      value: riskMetrics.assetCriticality,
                       icon: "asset",
-                      reason: "The affected asset has elevated operational importance.",
+                      reason: caseContext?.endpoint
+                        ? `Affected endpoint ${caseContext.endpoint} is part of the active investigation.`
+                        : "No affected endpoint was supplied by the investigation context.",
                     },
                     {
                       label: "IOC Reputation",
-                      value: 20,
+                      value: riskMetrics.iocReputation,
                       icon: "ioc",
-                      reason: "Associated indicators have suspicious or malicious reputation.",
+                      reason: `${riskMetrics.maliciousEntities} malicious and ${riskMetrics.suspiciousEntities} suspicious entities observed.`,
                     },
                     {
                       label: "Privilege Level",
-                      value: 15,
+                      value: riskMetrics.privilegeLevel,
                       icon: "privilege",
-                      reason: "The investigation contains privileged identity activity.",
+                      reason: `${riskMetrics.privilegeEvents} events matched privilege or credential activity.`,
                     },
                     {
                       label: "MITRE Techniques",
-                      value: 12,
+                      value: riskMetrics.mitreTechniques,
                       icon: "mitre",
-                      reason: "Observed behavior maps to credential-access techniques.",
+                      reason: `${riskMetrics.uniqueTechniques} unique MITRE techniques observed across correlated events.`,
                     },
                     {
                       label: "Lateral Movement",
-                      value: 10,
+                      value: riskMetrics.lateralMovement,
                       icon: "lateral",
-                      reason: "Network activity suggests potential movement across hosts.",
+                      reason: `${riskMetrics.networkEvents} network, connection, or lateral-movement events observed.`,
                     },
                     {
                       label: "Data Access",
-                      value: 5,
+                      value: riskMetrics.dataAccess,
                       icon: "data",
-                      reason: "Credential and memory artifacts increase investigation impact.",
+                      reason: `${riskMetrics.evidenceCount} evidence artifacts are linked to the investigation.`,
                     },
                   ]}
                 />

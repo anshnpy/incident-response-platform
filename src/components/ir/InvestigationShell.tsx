@@ -136,6 +136,16 @@ export function InvestigationShell({
     riskScore: number;
   } | null>(null);
 
+  const [liveCommandItems, setLiveCommandItems] = useState<
+    Array<{
+      id: string;
+      label: string;
+      meta: string;
+      category: "event" | "entity" | "ioc" | "mitre";
+      keywords?: string;
+    }>
+  >([]);
+
   useEffect(() => {
     const handleGlobalShortcut = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -203,70 +213,205 @@ export function InvestigationShell({
     };
   }, [activeCaseId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLiveSearchData() {
+      try {
+        const response = await fetch(
+          "/api/wazuh/alerts?size=50",
+          {
+            cache: "no-store",
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Unable to load Wazuh search data.");
+        }
+
+        const data = (await response.json()) as {
+          hits?: {
+            hits?: Array<{
+              _id?: string;
+              _source?: {
+                agent?: {
+                  ip?: string;
+                  name?: string;
+                };
+                data?: {
+                  win?: {
+                    eventdata?: {
+                      image?: string;
+                      originalFileName?: string;
+                      user?: string;
+                      commandLine?: string;
+                    };
+                  };
+                };
+                rule?: {
+                  description?: string;
+                  mitre?: {
+                    technique?: string[];
+                    id?: string[];
+                    tactic?: string[];
+                  };
+                };
+                id?: string;
+                timestamp?: string;
+                "@timestamp"?: string;
+              };
+            }>;
+          };
+        };
+
+        const hits = data.hits?.hits ?? [];
+        const items = new Map<string, {
+          id: string;
+          label: string;
+          meta: string;
+          category: "event" | "entity" | "ioc" | "mitre";
+          keywords?: string;
+        }>();
+
+        for (const hit of hits) {
+          const source = hit._source;
+          if (!source) continue;
+
+          const eventId = source.id ?? hit._id;
+          const timestamp =
+            source.timestamp ??
+            source["@timestamp"] ??
+            "Unknown time";
+
+          const ruleDescription =
+            source.rule?.description ??
+            "Wazuh event";
+
+          const endpoint =
+            source.agent?.name ??
+            "Unknown endpoint";
+
+          const ip = source.agent?.ip;
+
+          const eventLabel =
+            ruleDescription;
+
+          if (eventId) {
+            items.set(`event:${eventId}`, {
+              id: eventId,
+              label: eventLabel,
+              meta: `${endpoint} - ${timestamp}`,
+              category: "event",
+              keywords: [
+                ruleDescription,
+                source.data?.win?.eventdata?.commandLine ?? "",
+                source.data?.win?.eventdata?.originalFileName ?? "",
+              ].join(" "),
+            });
+          }
+
+          if (endpoint !== "Unknown endpoint") {
+            items.set(`entity:endpoint:${endpoint}`, {
+              id: endpoint,
+              label: endpoint,
+              meta: `Endpoint - ${ip ?? "No IP"}`,
+              category: "entity",
+              keywords: "host endpoint agent windows workstation",
+            });
+          }
+
+          const process =
+            source.data?.win?.eventdata?.originalFileName ??
+            source.data?.win?.eventdata?.image;
+
+          if (process) {
+            items.set(`entity:process:${process}`, {
+              id: process,
+              label: process,
+              meta: `Process - ${endpoint}`,
+              category: "entity",
+              keywords: [
+                "process",
+                source.data?.win?.eventdata?.commandLine ?? "",
+              ].join(" "),
+            });
+          }
+
+          const user = source.data?.win?.eventdata?.user;
+
+          if (user) {
+            items.set(`entity:user:${user}`, {
+              id: user,
+              label: user,
+              meta: `User - ${endpoint}`,
+              category: "entity",
+              keywords: "user account identity authentication",
+            });
+          }
+
+          if (ip) {
+            items.set(`ioc:ip:${ip}`, {
+              id: ip,
+              label: ip,
+              meta: `IP - ${endpoint}`,
+              category: "ioc",
+              keywords: "ip network indicator address",
+            });
+          }
+
+          const techniques =
+            source.rule?.mitre?.technique ?? [];
+          const techniqueIds =
+            source.rule?.mitre?.id ?? [];
+
+          techniques.forEach((technique, index) => {
+            const techniqueId =
+              techniqueIds[index] ?? technique;
+
+            items.set(`mitre:${techniqueId}`, {
+              id: techniqueId,
+              label: `${techniqueId} - ${technique}`,
+              meta: `MITRE ATT&CK - ${source.rule?.mitre?.tactic?.[index] ?? "Technique"}`,
+              category: "mitre",
+              keywords: [
+                technique,
+                source.rule?.mitre?.tactic?.[index] ?? "",
+                ruleDescription,
+              ].join(" "),
+            });
+          });
+        }
+
+        if (!cancelled) {
+          setLiveCommandItems(Array.from(items.values()));
+        }
+      } catch {
+        if (!cancelled) {
+          setLiveCommandItems([]);
+        }
+      }
+    }
+
+    void loadLiveSearchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const commandItems = [
-    {
-      id: "IR-2048",
-      label: "IR-2048 - Credential Theft Investigation",
-      meta: "Critical - Investigating",
-      category: "case" as const,
-      keywords: "incident credential theft critical investigating",
-    },
-    {
-      id: "mimikatz.exe",
-      label: "mimikatz.exe",
-      meta: "Process - Malicious",
-      category: "entity" as const,
-      keywords: "process lsass credential dumping malicious",
-    },
-    {
-      id: "j.smith",
-      label: "j.smith",
-      meta: "User - Suspicious",
-      category: "entity" as const,
-      keywords: "user account compromised identity",
-    },
-    {
-      id: "WIN-10-23-17",
-      label: "WIN-10-23-17",
-      meta: "Endpoint - Investigated",
-      category: "entity" as const,
-      keywords: "endpoint host workstation",
-    },
-    {
-      id: "185.199.109.153",
-      label: "185.199.109.153",
-      meta: "IP - Malicious",
-      category: "ioc" as const,
-      keywords: "ip network malicious indicator",
-    },
-    {
-      id: "2e4d-a91c",
-      label: "2e4d...a91c",
-      meta: "SHA-256 - Malicious",
-      category: "ioc" as const,
-      keywords: "hash sha256 malware",
-    },
-    {
-      id: "T1003.001",
-      label: "T1003.001 - LSASS Memory",
-      meta: "MITRE ATT&CK - Credential Access",
-      category: "mitre" as const,
-      keywords: "mitre attack credential dumping lsass",
-    },
-    {
-      id: "evt-004",
-      label: "Credential Dumping",
-      meta: "09:45:21 - EDR - Critical",
-      category: "event" as const,
-      keywords: "event mimikatz credential dumping edr",
-    },
-    {
-      id: "evt-006",
-      label: "Lateral Movement",
-      meta: "09:47:11 - Network - High",
-      category: "event" as const,
-      keywords: "event smb lateral movement network",
-    },
+    ...(activeCase
+      ? [
+          {
+            id: activeCase.id,
+            label: `${activeCase.id} - ${activeCase.title}`,
+            meta: `Case - Risk ${activeCase.riskScore}`,
+            category: "case" as const,
+            keywords: "case incident investigation",
+          },
+        ]
+      : []),
+    ...liveCommandItems,
   ];
 
   const handleCommandSelect = (item: {
