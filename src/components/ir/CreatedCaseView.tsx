@@ -203,7 +203,7 @@ export function CreatedCaseView({ caseId }: { caseId: string }) {
               </Link>
 
               <Link
-                href={`/cases/${encodeURIComponent(caseData.id)}/investigate`}
+                href={`/cases/${encodeURIComponent(caseData.id)}`}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#4F8CFF] px-3 py-2 text-[10px] font-medium text-white transition hover:bg-[#62AEFF]"
               >
                 Open Investigation

@@ -29,9 +29,11 @@ interface Metadata {
 export function IncidentMetadataControls({
   incidentId,
   fallbackStatus,
+  onSaved,
 }: {
   incidentId: string;
   fallbackStatus: string;
+  onSaved?: () => void;
 }) {
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [status, setStatus] = useState<IncidentStatus>(
@@ -138,6 +140,7 @@ export function IncidentMetadataControls({
       setNotes(data.metadata.notes ?? "");
       setTags(data.metadata.tags.join(", "));
       setSaved(true);
+      onSaved?.();
     } catch (saveError) {
       setError(
         saveError instanceof Error

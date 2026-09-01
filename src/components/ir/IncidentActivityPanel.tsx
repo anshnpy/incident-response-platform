@@ -17,8 +17,10 @@ interface IncidentActivity {
 
 export function IncidentActivityPanel({
   incidentId,
+  refreshKey = 0,
 }: {
   incidentId: string;
+  refreshKey?: number;
 }) {
   const [activity, setActivity] = useState<IncidentActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export function IncidentActivityPanel({
     return () => {
       cancelled = true;
     };
-  }, [incidentId]);
+  }, [incidentId, refreshKey]);
 
   return (
     <section className="rounded-xl border border-[#263441] bg-[#101720]">
@@ -144,7 +146,7 @@ export function IncidentActivityPanel({
                         {item.oldValue}
                       </span>
 
-                      <span className="text-[#596674]">?</span>
+                      <span className="text-[#596674]">-&gt;</span>
 
                       <span className="rounded-md border border-[#35D6A1]/20 bg-[#35D6A1]/[0.04] px-2 py-1 font-mono text-[#A7AFBA]">
                         {item.newValue}

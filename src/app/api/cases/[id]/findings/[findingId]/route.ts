@@ -39,8 +39,48 @@ export async function PATCH(
           { status: 400 },
         );
       }
+
+      const nextStatus = body.status.trim().toLowerCase();
+
+      const currentFinding = await env.DB
+        .prepare(
+          `SELECT status
+           FROM findings
+           WHERE case_id = ? AND id = ?
+           LIMIT 1`,
+        )
+        .bind(caseId, findingId)
+        .first<{ status?: string }>();
+
+      if (!currentFinding?.status) {
+        return NextResponse.json(
+          { error: "Finding not found." },
+          { status: 404 },
+        );
+      }
+
+      const currentStatus = currentFinding.status.toLowerCase();
+
+      const allowedTransitions: Record<string, string[]> = {
+        draft: ["review"],
+        review: ["confirmed", "draft"],
+        confirmed: ["draft"],
+      };
+
+      const allowedNextStatuses =
+        allowedTransitions[currentStatus] ?? [];
+
+      if (!allowedNextStatuses.includes(nextStatus)) {
+        return NextResponse.json(
+          {
+            error: `Invalid finding status transition: ${currentStatus} ? ${nextStatus}.`,
+          },
+          { status: 409 },
+        );
+      }
+
       updates.push("status = ?");
-      values.push(body.status);
+      values.push(nextStatus);
     }
 
     if (body.title !== undefined) {

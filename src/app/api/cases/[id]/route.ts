@@ -104,7 +104,7 @@ export async function PATCH(
 
     const existing = await env.DB
       .prepare(
-        `SELECT id
+        `SELECT id, status, source_incident_id
          FROM cases
          WHERE id = ?
          LIMIT 1`,
@@ -119,6 +119,41 @@ export async function PATCH(
         },
         { status: 404 },
       );
+    }
+
+    const existingCase = existing as {
+      id: string;
+      status: string;
+      source_incident_id?: string | null;
+    };
+
+    const previousStatus = existingCase.status;
+
+    const allowedTransitions: Record<string, string[]> = {
+      detected: ["triage"],
+      triage: ["investigating"],
+      investigating: ["confirmed"],
+      confirmed: ["contained"],
+      contained: ["eradication"],
+      eradication: ["recovery"],
+      recovery: ["closed"],
+      closed: [],
+    };
+
+    if (
+      typeof body.status === "string" &&
+      body.status !== previousStatus
+    ) {
+      const allowedNextStatuses = allowedTransitions[previousStatus] ?? [];
+
+      if (!allowedNextStatuses.includes(body.status)) {
+        return NextResponse.json(
+          {
+            error: `Invalid case status transition: ${previousStatus} -> ${body.status}.`,
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const allowedFields: Record<string, string> = {
@@ -173,6 +208,40 @@ export async function PATCH(
       )
       .bind(...values)
       .run();
+
+    if (
+      typeof body.status === "string" &&
+      body.status !== previousStatus &&
+      typeof existingCase.source_incident_id === "string" &&
+      existingCase.source_incident_id
+    ) {
+      await env.DB
+        .prepare(
+          `INSERT INTO incident_activity (
+            id,
+            incident_id,
+            actor,
+            action,
+            field,
+            old_value,
+            new_value,
+            detail,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          existingCase.source_incident_id,
+          "SOC Analyst",
+          "case_status_changed",
+          "case_status",
+          previousStatus,
+          body.status,
+          `Case ${id} moved from ${previousStatus} to ${body.status}.`,
+          new Date().toISOString(),
+        )
+        .run();
+    }
 
     const updated = await env.DB
       .prepare(

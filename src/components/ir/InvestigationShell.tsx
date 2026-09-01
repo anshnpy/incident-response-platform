@@ -429,14 +429,7 @@ export function InvestigationShell({
     }
 
     if (item.category === "event") {
-      router.push("/investigate");
-      window.setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent("ir:search-select-event", {
-            detail: { id: item.id },
-          }),
-        );
-      }, 0);
+      router.push(`/investigate?event=${encodeURIComponent(item.id)}`);
       return;
     }
 

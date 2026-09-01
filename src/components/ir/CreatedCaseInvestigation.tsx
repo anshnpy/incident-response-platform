@@ -33,6 +33,8 @@ export function CreatedCaseInvestigation({
   const [caseData, setCaseData] = useState<CreatedCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,12 +129,63 @@ export function CreatedCaseInvestigation({
     );
   }
 
-  const initialEventId =
-    caseData.technique === "Process Injection"
-      ? "evt-004"
-      : caseData.technique === "Account Manipulation"
-        ? "evt-007"
-        : "evt-004";
+  const updateCaseStatus = async (nextStatus: string) => {
+    if (!caseData || nextStatus === caseData.status || statusSaving) {
+      return;
+    }
+
+    const previousStatus = caseData.status;
+
+    try {
+      setStatusSaving(true);
+      setStatusError(null);
+
+      const response = await fetch(
+        `/api/cases/${encodeURIComponent(caseData.id)}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: nextStatus,
+          }),
+        },
+      );
+
+      const data = (await response.json()) as {
+        case?: CreatedCase;
+        error?: string;
+      };
+
+      if (!response.ok || !data.case) {
+        throw new Error(data.error ?? "Unable to update case status.");
+      }
+
+      setCaseData(data.case);
+    } catch (error) {
+      setStatusError(
+        error instanceof Error
+          ? error.message
+          : `Unable to move case from ${previousStatus}.`,
+      );
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const allowedNextStatuses: Record<string, string[]> = {
+    detected: ["triage"],
+    triage: ["investigating"],
+    investigating: ["confirmed"],
+    confirmed: ["contained"],
+    contained: ["eradication"],
+    eradication: ["recovery"],
+    recovery: ["closed"],
+    closed: [],
+  };
+
+  const nextStatuses = allowedNextStatuses[caseData.status] ?? [];
 
   return (
     <InvestigationShell>
@@ -163,6 +216,29 @@ export function CreatedCaseInvestigation({
                 </p>
               </div>
 
+              <label className="flex items-center gap-2 rounded-lg border border-[#263441] bg-[#101720] px-2.5 py-1.5">
+                <span className="text-[8px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
+                  Status
+                </span>
+
+                <select
+                  value={caseData.status}
+                  onChange={(event) => void updateCaseStatus(event.target.value)}
+                  disabled={statusSaving}
+                  className="bg-transparent text-[9px] font-medium uppercase text-[#35D6A1] outline-none disabled:cursor-wait disabled:opacity-60"
+                >
+                  <option value={caseData.status}>
+                    {caseData.status}
+                  </option>
+
+                  {nextStatuses.map((nextStatus) => (
+                    <option key={nextStatus} value={nextStatus}>
+                      {nextStatus}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <Link
                 href={`/incidents/${encodeURIComponent(caseData.sourceIncidentId)}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-[#263441] px-3 py-2 text-[9px] text-[#A7AFBA] transition hover:border-[#3A4652] hover:text-white"
@@ -171,6 +247,12 @@ export function CreatedCaseInvestigation({
                 <ExternalLink className="h-3.5 w-3.5" />
               </Link>
             </div>
+
+            {statusError && (
+              <div className="mt-3 rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.04] px-3 py-2 text-[9px] text-[#FF8A96]">
+                {statusError}
+              </div>
+            )}
 
             <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <Context label="Source IP" value={caseData.sourceIp} />
@@ -188,7 +270,6 @@ export function CreatedCaseInvestigation({
         </section>
 
         <InvestigationWorkspace
-          initialEventId={initialEventId}
           caseContext={{
             caseId: caseData.id,
             sourceIncidentId: caseData.sourceIncidentId,

@@ -44,13 +44,21 @@ const severityClass: Record<string, string> = {
 
 export function IncidentList({
   incidents,
+  initialSeverity = "all",
+  initialStatus = "all",
+  initialPriority = "all",
+  initialSource = "all",
 }: {
   incidents: Incident[];
+  initialSeverity?: string;
+  initialStatus?: string;
+  initialPriority?: string;
+  initialSource?: string;
 }) {
-  const [severity, setSeverity] = useState("all");
-  const [priority, setPriority] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [source, setSource] = useState("all");
+  const [severity, setSeverity] = useState(initialSeverity);
+  const [priority, setPriority] = useState(initialPriority);
+  const [status, setStatus] = useState(initialStatus);
+  const [source, setSource] = useState(initialSource);
   const [sort, setSort] = useState("newest");
 
   const options = useMemo(() => {
@@ -226,7 +234,7 @@ export function IncidentList({
                 <div className="mt-0.5 truncate text-[9px] text-[#59616D]">
                   {incident.source}
                   {incident.technique
-                    ? ` ? ${incident.technique}`
+                    ? ` - ${incident.technique}`
                     : ""}
                 </div>
               </div>

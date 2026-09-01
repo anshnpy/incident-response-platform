@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+import { CaseFilters } from "@/components/ir/CaseFilters";
 import { InvestigationShell } from "@/components/ir/InvestigationShell";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,18 @@ interface CaseRow {
   riskScore: number;
 }
 
-export default async function CasesPage() {
+export default async function CasesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    q?: string;
+    severity?: string;
+    status?: string;
+    risk?: string;
+  }>;
+}) {
   const { env } = await getCloudflareContext({ async: true });
+  const params = await searchParams;
 
   const result = await env.DB
     .prepare(
@@ -33,7 +44,40 @@ export default async function CasesPage() {
     )
     .all<CaseRow>();
 
-  const cases = result.results ?? [];
+  const allCases = result.results ?? [];
+
+  const query = params?.q?.trim().toLowerCase() ?? "";
+  const requestedSeverity = params?.severity?.toLowerCase() ?? "";
+
+  const cases = allCases.filter((item) => {
+    const haystack = [
+      item.id,
+      item.title,
+      item.affectedUser ?? "",
+      item.affectedEndpoint ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const queryMatch = !query || haystack.includes(query);
+
+    const severityMatch =
+      !requestedSeverity ||
+      requestedSeverity === "all" ||
+      item.severity.toLowerCase() === requestedSeverity;
+
+    const statusMatch =
+      !params?.status ||
+      (params.status === "active"
+        ? !["closed", "resolved"].includes(item.status.toLowerCase())
+        : item.status.toLowerCase() === params.status?.toLowerCase());
+
+    const riskMatch =
+      params?.risk !== "high" ||
+      item.riskScore >= 80;
+
+    return queryMatch && severityMatch && statusMatch && riskMatch;
+  });
 
   return (
     <InvestigationShell>
@@ -51,6 +95,15 @@ export default async function CasesPage() {
             Active investigations and analyst-owned response cases.
           </p>
         </div>
+
+        <CaseFilters
+          statuses={[
+            ...new Set(allCases.map((item) => item.status)),
+          ]}
+          severities={[
+            ...new Set(allCases.map((item) => item.severity)),
+          ]}
+        />
 
         {cases.length === 0 ? (
           <div className="p-6">

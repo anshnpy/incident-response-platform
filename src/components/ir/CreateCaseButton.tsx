@@ -25,9 +25,15 @@ export function CreateCaseButton({
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function createCase() {
+    if (creating || created) {
+      return;
+    }
+
     setCreating(true);
+    setError(null);
 
     try {
       const severity =
@@ -94,33 +100,45 @@ export function CreateCaseButton({
       window.setTimeout(() => {
         router.push(`/cases/${encodeURIComponent(savedCaseId)}`);
       }, 250);
-    } catch (error) {
-      console.error("Case creation failed:", error);
+    } catch (createError) {
       setCreating(false);
       setCreated(false);
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Unable to create case.",
+      );
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={createCase}
-      disabled={creating || created}
-      className="inline-flex items-center gap-2 rounded-lg border border-[#263441] bg-[#0B1016] px-3 py-2 text-[10px] text-[#A7AFBA] transition hover:border-[#3A4652] hover:text-white disabled:cursor-wait disabled:opacity-70"
-    >
-      {created ? (
-        <>
-          <Check className="h-3.5 w-3.5 text-[#35D6A1]" />
-          Case Created
-        </>
-      ) : creating ? (
-        "Creating..."
-      ) : (
-        <>
-          Create Case
-          <ArrowUpRight className="h-3.5 w-3.5" />
-        </>
+    <div className="flex flex-col items-start gap-1.5">
+      <button
+        type="button"
+        onClick={createCase}
+        disabled={creating || created}
+        className="inline-flex items-center gap-2 rounded-lg border border-[#263441] bg-[#0B1016] px-3 py-2 text-[10px] text-[#A7AFBA] transition hover:border-[#3A4652] hover:text-white disabled:cursor-wait disabled:opacity-70"
+      >
+        {created ? (
+          <>
+            <Check className="h-3.5 w-3.5 text-[#35D6A1]" />
+            Case Created
+          </>
+        ) : creating ? (
+          "Creating..."
+        ) : (
+          <>
+            Create Case
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </>
+        )}
+      </button>
+
+      {error && (
+        <div className="max-w-[260px] text-[9px] leading-4 text-[#FF8A96]">
+          {error}
+        </div>
       )}
-    </button>
+    </div>
   );
 }

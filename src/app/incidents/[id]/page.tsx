@@ -11,8 +11,7 @@ import {
 
 import { NavigationRoute } from "@/components/ir/NavigationRoute";
 import { CreateCaseButton } from "@/components/ir/CreateCaseButton";
-import { IncidentMetadataControls } from "@/components/ir/IncidentMetadataControls";
-import { IncidentActivityPanel } from "@/components/ir/IncidentActivityPanel";
+import { IncidentDetailClient } from "@/components/ir/IncidentDetailClient";
 
 interface WazuhIncident {
   id: string;
@@ -209,12 +208,10 @@ export default async function IncidentDetailPage({
           </div>
         </section>
 
-        <IncidentMetadataControls
+        <IncidentDetailClient
           incidentId={incident.id}
           fallbackStatus={incident.status}
         />
-
-        <IncidentActivityPanel incidentId={incident.id} />
 
         <section className="rounded-xl border border-[#263441] bg-[#101720] p-4">
           <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">

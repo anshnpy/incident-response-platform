@@ -48,17 +48,145 @@ async function getIncidents(): Promise<WazuhIncident[]> {
   }
 }
 
+async function getEntityTelemetry(entity: string) {
+  try {
+    const response = await fetch(
+      "/api/wazuh/alerts?size=20",
+      { cache: "no-store" },
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as {
+      hits?: { hits?: Array<{
+        _id?: string;
+        _source?: {
+          agent?: { name?: string; ip?: string };
+          data?: {
+            win?: {
+              eventdata?: Record<string, string>;
+            };
+          };
+          rule?: {
+            description?: string;
+            level?: number;
+          };
+          ["@timestamp"]?: string;
+        };
+      }> };
+    };
+
+    const normalized = entity.toLowerCase();
+
+    return (data.hits?.hits ?? []).filter((hit) => {
+      const source = hit._source;
+      const eventdata = source?.data?.win?.eventdata ?? {};
+
+      const values = [
+        source?.agent?.name,
+        source?.agent?.ip,
+        eventdata.image,
+        eventdata.user,
+        eventdata.targetUserName,
+        eventdata.commandLine,
+        eventdata.hashes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return values.includes(normalized);
+    });
+  } catch {
+    return [];
+  }
+}
+
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ incident?: string }>;
+  searchParams: Promise<{
+    incident?: string;
+    entity?: string;
+    event?: string;
+  }>;
 }) {
-  const { incident: selectedIncidentId } = await searchParams;
+  const {
+    incident: selectedIncidentId,
+    entity: selectedEntityName,
+    event: selectedEventId,
+  } = await searchParams;
   const incidents = await getIncidents();
+
+  const entityTelemetry = selectedEntityName
+    ? await getEntityTelemetry(selectedEntityName)
+    : [];
 
   const selectedIncident = selectedIncidentId
     ? incidents.find((item) => item.id === selectedIncidentId) ?? null
     : null;
+
+  let selectedEvent: {
+    id: string;
+    title: string;
+    endpoint: string;
+    timestamp: string;
+    level: number;
+  } | null = null;
+
+  if (selectedEventId) {
+    try {
+      const response = await fetch(
+        "/api/wazuh/alerts?size=50",
+        { cache: "no-store" },
+      );
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          hits?: {
+            hits?: Array<{
+              _id?: string;
+              _source?: {
+                id?: string;
+                agent?: {
+                  name?: string;
+                };
+                rule?: {
+                  description?: string;
+                  level?: number;
+                };
+                timestamp?: string;
+                "@timestamp"?: string;
+              };
+            }>;
+          };
+        };
+
+        const hit = (data.hits?.hits ?? []).find(
+          (item) => (item._source?.id ?? item._id) === selectedEventId,
+        );
+
+        if (hit) {
+          const source = hit._source;
+
+          selectedEvent = {
+            id: source?.id ?? hit._id ?? selectedEventId,
+            title: source?.rule?.description ?? "Wazuh event",
+            endpoint: source?.agent?.name ?? "Unknown endpoint",
+            timestamp:
+              source?.timestamp ??
+              source?.["@timestamp"] ??
+              "Unknown time",
+            level: source?.rule?.level ?? 0,
+          };
+        }
+      }
+    } catch {
+      selectedEvent = null;
+    }
+  }
 
   return (
     <NavigationRoute
@@ -67,7 +195,98 @@ export default async function Page({
       description="Investigate live Wazuh incidents through telemetry, evidence, entity relationships, and response context."
     >
       <div className="space-y-4">
-        {selectedIncident ? (
+        {selectedEvent ? (
+          <section className="rounded-xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.035] p-5">
+            <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
+              Selected Wazuh Event
+            </div>
+
+            <div className="mt-2 font-medium text-[13px] text-[#D9DEE7]">
+              {selectedEvent.title}
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <InvestigationField
+                label="Event ID"
+                value={selectedEvent.id}
+              />
+
+              <InvestigationField
+                label="Endpoint"
+                value={selectedEvent.endpoint}
+              />
+
+              <InvestigationField
+                label="Rule Level"
+                value={String(selectedEvent.level)}
+              />
+            </div>
+
+            <div className="mt-3 font-mono text-[9px] text-[#69727E]">
+              {selectedEvent.timestamp}
+            </div>
+          </section>
+        ) : selectedEntityName ? (
+          <section className="rounded-xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.035] p-5">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="h-4 w-4 shrink-0 text-[#4F8CFF]" />
+
+              <div className="min-w-0">
+                <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
+                  Entity Investigation
+                </div>
+
+                <div className="mt-1 truncate font-mono text-[12px] text-[#D9DEE7]">
+                  {selectedEntityName}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-[10px] text-[#7E8794]">
+                Matching Wazuh telemetry for this entity.
+              </p>
+
+              <span className="font-mono text-[9px] text-[#4F8CFF]">
+                {entityTelemetry.length} events
+              </span>
+            </div>
+
+            {entityTelemetry.length > 0 ? (
+              <div className="mt-4 divide-y divide-[#263441]/70 rounded-lg border border-[#263441] bg-[#0B1016]">
+                {entityTelemetry.slice(0, 6).map((hit) => (
+                  <div key={hit._id ?? hit._source?.["@timestamp"]} className="px-3 py-2.5">
+                    <div className="text-[9px] font-medium text-[#D9DEE7]">
+                      {hit._source?.rule?.description ?? "Wazuh alert"}
+                    </div>
+
+                    <div className="mt-1 font-mono text-[8px] text-[#59616D]">
+                      {hit._source?.agent?.name ?? "Unknown endpoint"}
+                      {" ? "}
+                      level {hit._source?.rule?.level ?? 0}
+                      {" ? "}
+                      {hit._source?.["@timestamp"]
+                        ? new Date(hit._source["@timestamp"]).toLocaleString("en-IN")
+                        : "Unknown time"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-[#1B2430] bg-[#0B1016] px-3 py-4 text-[9px] text-[#69727E]">
+                No matching Wazuh telemetry was found for this entity.
+              </div>
+            )}
+
+            <Link
+              href="/entities"
+              className="mt-4 inline-flex items-center gap-1.5 text-[9px] text-[#4F8CFF] transition hover:text-[#62AEFF]"
+            >
+              Back to entities
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </section>
+        ) : selectedIncident ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.035] px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">

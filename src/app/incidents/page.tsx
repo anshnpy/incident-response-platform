@@ -87,8 +87,27 @@ async function getIncidents(): Promise<WazuhIncident[]> {
   }
 }
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    severity?: string;
+    priority?: string;
+    status?: string;
+    source?: string;
+  }>;
+}) {
   const incidents = await getIncidents();
+  const params = await searchParams;
+
+  const filteredIncidents =
+    params?.severity
+      ? incidents.filter(
+          (incident) =>
+            incident.severity.toLowerCase() ===
+            params.severity?.toLowerCase(),
+        )
+      : incidents;
 
   return (
     <NavigationRoute
@@ -96,10 +115,16 @@ export default async function Page() {
       title="Incidents"
       description="Live security incidents derived from Wazuh telemetry and correlated investigation activity."
     >
-      <IncidentList incidents={incidents} />
+      <IncidentList
+        incidents={filteredIncidents}
+        initialSeverity={params?.severity?.toLowerCase() ?? "all"}
+        initialPriority={params?.priority?.toLowerCase() ?? "all"}
+        initialStatus={params?.status?.toLowerCase() ?? "all"}
+        initialSource={params?.source ?? "all"}
+      />
 
       <div className="mt-3 text-[9px] text-[#4F5660]">
-        Showing live incidents from the connected SOC Lab Wazuh pipeline.
+        Showing {filteredIncidents.length} live incidents from the connected SOC Lab Wazuh pipeline.
       </div>
     </NavigationRoute>
   );

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import * as React from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -29,11 +29,13 @@ export interface EvidencePreview {
 interface EvidencePreviewDrawerProps {
   evidence: EvidencePreview | null;
   onClose: () => void;
+  onOpen?: () => void;
 }
 
 export function EvidencePreviewDrawer({
   evidence,
   onClose,
+  onOpen,
 }: EvidencePreviewDrawerProps) {
   const [hashCopied, setHashCopied] = React.useState(false);
 
@@ -211,7 +213,7 @@ export function EvidencePreviewDrawer({
             <div className="flex gap-2 border-t border-[#263441] bg-[#0B1016] p-4">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={onOpen ?? onClose}
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#4F8CFF] px-4 py-2.5 text-[10px] font-medium text-white transition hover:bg-[#62AEFF]"
               >
                 <ExternalLink className="h-3.5 w-3.5" />

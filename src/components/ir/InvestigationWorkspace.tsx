@@ -274,7 +274,8 @@ export function InvestigationWorkspace({
                 second: "2-digit",
               }).format(new Date(artifact.timestamp)),
               "?",
-            ] as [string, string, string, string],
+              artifact.sourceEventId,
+            ] as [string, string, string, string, string],
         ),
     [investigationArtifacts],
   );
@@ -386,6 +387,7 @@ export function InvestigationWorkspace({
   const [findingValidationError, setFindingValidationError] = useState<string | null>(null);
   const [focusedMitreTechnique, setFocusedMitreTechnique] = useState<string | null>(null);
   const [draftFinding, setDraftFinding] = useState<{
+    id?: string;
     title: string;
     description: string;
     severity: string;
@@ -452,6 +454,7 @@ export function InvestigationWorkspace({
             : "draft";
 
         setDraftFinding({
+          id: finding.id,
           title: finding.title,
           description: finding.description,
           severity: finding.severity,
@@ -541,11 +544,228 @@ export function InvestigationWorkspace({
   const [playbookOpen, setPlaybookOpen] = useState(false);
   const [playbookRunning, setPlaybookRunning] = useState(false);
   const [playbookCompleted, setPlaybookCompleted] = useState(false);
+  const [playbookRunId, setPlaybookRunId] = useState<string | null>(null);
+  const [persistedPlaybookSteps, setPersistedPlaybookSteps] = useState<
+    Array<{
+      id: string;
+      run_id: string;
+      step_id: string;
+      title: string;
+      description: string;
+      status: "pending" | "running" | "completed" | "failed" | "cancelled";
+      started_at?: string | null;
+      completed_at?: string | null;
+      error?: string | null;
+      sort_order: number;
+    }>
+  >([]);
+  const [playbookError, setPlaybookError] = useState<string | null>(null);
   const [dismissedFinding, setDismissedFinding] = useState(false);
   const [actionState, setActionState] = useState<
     Record<string, "idle" | "running" | "done">
   >({});
+  const [persistedResponseActions, setPersistedResponseActions] = useState<
+    Array<{
+      id: string;
+      caseId: string;
+      name: string;
+      target: string;
+      description: string;
+      status: "requested" | "approved" | "running" | "succeeded" | "failed";
+      requestedAt: string;
+      completedAt?: string;
+      error?: string;
+    }>
+  >([]);
+  const [responseActionsLoading, setResponseActionsLoading] = useState(false);
+  const [responseActionsError, setResponseActionsError] = useState<string | null>(
+    null,
+  );
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadResponseActions() {
+      if (!caseContext?.caseId) {
+        setPersistedResponseActions([]);
+        return;
+      }
+
+      setResponseActionsLoading(true);
+      setResponseActionsError(null);
+
+      try {
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseContext.caseId)}/response-actions`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const data = (await response.json()) as {
+          actions?: Array<{
+            id: string;
+            caseId: string;
+            name: string;
+            target: string;
+            description: string;
+            status:
+              | "requested"
+              | "approved"
+              | "running"
+              | "succeeded"
+              | "failed";
+            requestedAt: string;
+            completedAt?: string;
+            error?: string;
+          }>;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ?? "Unable to load response actions.",
+          );
+        }
+
+        if (!cancelled) {
+          setPersistedResponseActions(data.actions ?? []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPersistedResponseActions([]);
+          setResponseActionsError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load response actions.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setResponseActionsLoading(false);
+        }
+      }
+    }
+
+    void loadResponseActions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseContext?.caseId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlaybookState() {
+      if (!caseContext?.caseId) {
+        setPlaybookRunId(null);
+        setPersistedPlaybookSteps([]);
+        setPlaybookError(null);
+        setPlaybookRunning(false);
+        setPlaybookCompleted(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/cases/${encodeURIComponent(caseContext.caseId)}/playbooks`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const data = (await response.json()) as {
+          runs?: Array<{
+            id: string;
+            status: string;
+            updated_at: string;
+          }>;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ?? "Unable to load playbook runs.",
+          );
+        }
+
+        const latestRun = data.runs?.[0];
+
+        if (!latestRun) {
+          if (!cancelled) {
+            setPlaybookRunId(null);
+            setPersistedPlaybookSteps([]);
+            setPlaybookRunning(false);
+            setPlaybookCompleted(false);
+            setPlaybookError(null);
+          }
+          return;
+        }
+
+        const runResponse = await fetch(
+          `/api/cases/${encodeURIComponent(caseContext.caseId)}/playbooks/${encodeURIComponent(latestRun.id)}`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const runData = (await runResponse.json()) as {
+          run?: {
+            id: string;
+            status: string;
+          };
+          steps?: Array<{
+            id: string;
+            run_id: string;
+            step_id: string;
+            title: string;
+            description: string;
+            status:
+              | "pending"
+              | "running"
+              | "completed"
+              | "failed"
+              | "cancelled";
+            started_at?: string | null;
+            completed_at?: string | null;
+            error?: string | null;
+            sort_order: number;
+          }>;
+          error?: string;
+        };
+
+        if (!runResponse.ok) {
+          throw new Error(
+            runData.error ?? "Unable to load playbook run.",
+          );
+        }
+
+        if (!cancelled) {
+          setPlaybookRunId(latestRun.id);
+          setPersistedPlaybookSteps(runData.steps ?? []);
+          setPlaybookRunning(runData.run?.status === "running");
+          setPlaybookCompleted(runData.run?.status === "completed");
+          setPlaybookError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPlaybookError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load playbook state.",
+          );
+        }
+      }
+    }
+
+    void loadPlaybookState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [caseContext?.caseId]);
 
   const selectedEvent =
     events.find((event) => event.id === selectedId) ??
@@ -759,6 +979,7 @@ export function InvestigationWorkspace({
         type: selectedEvidence[1],
         collected: selectedEvidence[2],
         size: selectedEvidence[3],
+        sourceEventId: selectedEvidence[4],
         source: selectedEvent.source,
         hash:
           selectedEvent.entity.details.Hashes
@@ -771,8 +992,68 @@ export function InvestigationWorkspace({
       }
     : null;
 
-  const selectedResponseAction =
-    responseActions.find(([name]) => name === confirmAction) ?? null;
+  const persistedActionsByName = new Map<
+    string,
+    (typeof persistedResponseActions)[number]
+  >();
+
+  for (const action of persistedResponseActions) {
+    if (!persistedActionsByName.has(action.name)) {
+      persistedActionsByName.set(action.name, action);
+    }
+  }
+
+  const getPersistedAction = (name: string) =>
+    persistedActionsByName.get(name);
+
+  const selectedResponseAction = confirmAction
+    ? (() => {
+        const definition = responseActions.find(
+          ([name]) => name === confirmAction,
+        );
+
+        if (!definition) {
+          return null;
+        }
+
+        const persisted = getPersistedAction(confirmAction);
+
+        return {
+          name: definition[0],
+          description: persisted?.description ?? definition[1],
+          target:
+            persisted?.target ??
+            (definition[0] === "Isolate Host"
+              ? caseContext?.endpoint ?? "Unknown endpoint"
+              : definition[0] === "Disable Account"
+                ? entity?.name ?? "Unknown account"
+                : definition[0] === "Block IOC"
+                  ? caseContext?.sourceIp ?? "Unknown IOC"
+                  : caseContext?.endpoint ?? "Unknown endpoint"),
+          persistedId: persisted?.id ?? null,
+          status: persisted?.status ?? null,
+        };
+      })()
+    : null;
+
+  const normalizedActionState = responseActions.reduce(
+    (current, [name]) => {
+      const persisted = getPersistedAction(name);
+
+      if (!persisted) {
+        current[name] = "idle";
+      } else if (persisted.status === "running") {
+        current[name] = "running";
+      } else if (persisted.status === "succeeded") {
+        current[name] = "done";
+      } else {
+        current[name] = "idle";
+      }
+
+      return current;
+    },
+    {} as Record<string, "idle" | "running" | "done">,
+  );
 
   const narrativeSeverity = selectedEvent.severity;
 
@@ -781,34 +1062,47 @@ export function InvestigationWorkspace({
     {
       id: "pb-01",
       title: "Validate detection",
-      description: "Confirm credential-access indicators on the affected endpoint.",
-      status: "completed" as const,
+      description:
+        "Confirm credential-access indicators on the affected endpoint.",
     },
     {
       id: "pb-02",
       title: "Collect evidence",
-      description: "Acquire memory and endpoint artifacts for investigation.",
-      status: "completed" as const,
+      description:
+        "Acquire memory and endpoint artifacts for investigation.",
     },
     {
       id: "pb-03",
       title: "Isolate endpoint",
-      description: "Apply network containment to WIN-10-23-17.",
-      status: playbookRunning ? "running" as const : playbookCompleted ? "completed" as const : "pending" as const,
+      description: "Apply network containment to the affected endpoint.",
     },
     {
       id: "pb-04",
       title: "Disable compromised account",
-      description: "Suspend j.smith credentials and prevent further authentication.",
-      status: playbookCompleted ? "completed" as const : "pending" as const,
+      description:
+        "Suspend the affected account to prevent further authentication.",
     },
     {
       id: "pb-05",
       title: "Block malicious IOC",
-      description: "Block 185.199.109.153 through network and endpoint controls.",
-      status: playbookCompleted ? "completed" as const : "pending" as const,
+      description:
+        "Block the selected indicator through network and endpoint controls.",
     },
-  ];
+  ].map((step) => {
+    const persisted = persistedPlaybookSteps.find(
+      (item) => item.step_id === step.id,
+    );
+
+    return {
+      ...step,
+      status:
+        persisted?.status === "completed"
+          ? ("completed" as const)
+          : persisted?.status === "running"
+            ? ("running" as const)
+            : ("pending" as const),
+    };
+  });
 
   const executeAction = (name: string) => {
     setConfirmAction(name);
@@ -910,7 +1204,9 @@ export function InvestigationWorkspace({
         findings?: Array<{ id: string; status: string }>;
       };
 
-      const finding = data.findings?.[0];
+      const finding = data.findings?.find(
+        (item) => item.id === draftFinding.id,
+      );
 
       if (!finding) {
         throw new Error("No persisted finding was found for this case.");
@@ -1015,7 +1311,9 @@ export function InvestigationWorkspace({
         findings?: Array<{ id: string; status: string }>;
       };
 
-      const finding = data.findings?.[0];
+      const finding = data.findings?.find(
+        (item) => item.id === draftFinding.id,
+      );
 
       if (!finding) {
         throw new Error("No persisted finding was found for this case.");
@@ -1080,27 +1378,35 @@ export function InvestigationWorkspace({
   };
 
   const confirmResponseAction = async () => {
-    if (!confirmAction) return;
+    if (!confirmAction || !caseContext?.caseId) {
+      return;
+    }
 
     const name = confirmAction;
 
+    const definition = responseActions.find(
+      ([actionName]) => actionName === name,
+    );
+
+    if (!definition) {
+      setFindingValidationError("Unknown response action.");
+      return;
+    }
+
+    const persisted = getPersistedAction(name);
+
     const target =
-      name === "Isolate Host"
-        ? caseContext?.endpoint ?? "Unknown endpoint"
+      persisted?.target ??
+      (name === "Isolate Host"
+        ? caseContext.endpoint ?? "Unknown endpoint"
         : name === "Disable Account"
           ? entity?.name ?? "Unknown account"
           : name === "Block IOC"
-            ? iocs[0]?.[0] ?? caseContext?.sourceIp ?? "Unknown IOC"
-            : caseContext?.endpoint ?? "Unknown endpoint";
+            ? iocs[0]?.[0] ?? caseContext.sourceIp ?? "Unknown IOC"
+            : caseContext.endpoint ?? "Unknown endpoint");
 
     const description =
-      name === "Isolate Host"
-        ? "Network containment for the affected endpoint."
-        : name === "Disable Account"
-          ? "Suspend the affected account to prevent further authentication."
-          : name === "Block IOC"
-            ? "Block the selected indicator through endpoint and network controls."
-            : "Acquire a forensic memory image from the affected endpoint.";
+      persisted?.description ?? definition[1];
 
     try {
       setActionState((current) => ({
@@ -1109,7 +1415,7 @@ export function InvestigationWorkspace({
       }));
 
       const createResponse = await fetch(
-        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions`,
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/response-actions`,
         {
           method: "POST",
           headers: {
@@ -1160,73 +1466,94 @@ export function InvestigationWorkspace({
         },
       ]);
 
-      const runningResponse = await fetch(
-        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions/${encodeURIComponent(actionId)}`,
+      const executeResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/response-actions/${encodeURIComponent(actionId)}/execute`,
         {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status: "running",
-          }),
+          method: "POST",
+          cache: "no-store",
         },
       );
 
-      if (!runningResponse.ok) {
-        throw new Error("Unable to mark response action as running.");
-      }
-
-      const completedResponse = await fetch(
-        `/api/cases/${encodeURIComponent(caseContext?.caseId ?? "")}/response-actions/${encodeURIComponent(actionId)}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            status: "succeeded",
-          }),
-        },
-      );
-
-      const completedData = (await completedResponse.json()) as {
+      const executeData = (await executeResponse.json()) as {
+        action?: {
+          status?: string;
+          error?: string;
+          message?: string;
+        };
         error?: string;
       };
 
-      if (!completedResponse.ok) {
+      if (!executeResponse.ok) {
         throw new Error(
-          completedData.error ??
-            "Unable to complete response action.",
+          executeData.error ??
+            executeData.action?.error ??
+            "Unable to execute response action.",
         );
       }
 
-      setActionState((current) => ({
-        ...current,
-        [name]: "done",
-      }));
+      if (executeData.action?.status === "succeeded") {
+        setActionState((current) => ({
+          ...current,
+          [name]: "done",
+        }));
 
-      await recordFindingActivity({
-        action: "response_completed",
-        field: "response_action",
-        oldValue: "running",
-        newValue: "succeeded",
-        detail: `${name} completed successfully against ${target}.`,
-      });
+        await recordFindingActivity({
+          action: "response_completed",
+          field: "response_action",
+          oldValue: "running",
+          newValue: "succeeded",
+          detail: `${name} completed successfully against ${target}.`,
+        });
 
-      setFindingAuditEvents((current) => [
-        ...current,
+        setFindingAuditEvents((current) => [
+          ...current,
+          {
+            id: `response-completed-${Date.now()}`,
+            label: `${name} completed`,
+            detail: `The ${name.toLowerCase()} response action completed successfully.`,
+            time: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            tone: "success",
+          },
+        ]);
+      } else {
+        throw new Error(
+          executeData.action?.message ??
+            "Response action did not succeed.",
+        );
+      }
+
+      const refreshResponse = await fetch(
+        `/api/cases/${encodeURIComponent(caseContext.caseId)}/response-actions`,
         {
-          id: `response-completed-${Date.now()}`,
-          label: `${name} completed`,
-          detail: `The ${name.toLowerCase()} response action completed successfully.`,
-          time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-          tone: "success",
+          cache: "no-store",
         },
-      ]);
+      );
+
+      const refreshData = (await refreshResponse.json()) as {
+        actions?: Array<{
+          id: string;
+          caseId: string;
+          name: string;
+          target: string;
+          description: string;
+          status:
+            | "requested"
+            | "approved"
+            | "running"
+            | "succeeded"
+            | "failed";
+          requestedAt: string;
+          completedAt?: string;
+          error?: string;
+        }>;
+      };
+
+      if (refreshResponse.ok) {
+        setPersistedResponseActions(refreshData.actions ?? []);
+      }
 
       setConfirmAction(null);
     } catch (error) {
@@ -1768,7 +2095,9 @@ export function InvestigationWorkspace({
                             findings?: Array<{ id: string }>;
                           };
 
-                          const finding = data.findings?.[0];
+                          const finding = data.findings?.find(
+        (item) => item.id === draftFinding.id,
+      );
 
                           if (!finding) {
                             throw new Error(
@@ -2229,29 +2558,63 @@ export function InvestigationWorkspace({
 
               <div className="divide-y divide-[#1B2430]">
                 {[
-                  ["User", "j.smith"],
-                  ["Endpoint", "WIN-10-23-17"],
-                  ["Network", "185.199.109.153"],
-                ].map(([label, value]) => (
+                  {
+                    label: "User",
+                    value:
+                      selectedEvent.entity.details.User ??
+                      selectedEvent.entity.details.TargetUser ??
+                      "Not observed",
+                  },
+                  {
+                    label: "Endpoint",
+                    value:
+                      selectedEvent.entity.details.Host ??
+                      selectedEvent.entity.details.Agent ??
+                      "Not observed",
+                  },
+                  {
+                    label: "Network",
+                    value:
+                      selectedEvent.entity.details.SourceIP ??
+                      selectedEvent.source ??
+                      "Not observed",
+                  },
+                ].map(({ label, value }) => (
                   <button
                     key={label}
                     type="button"
                     onClick={() => {
-                      const matchingEvent =
-                        label === "Network"
-                          ? events.find((event) => event.source === "NETWORK")
-                          : label === "Endpoint"
-                            ? events.find(
-                                (event) =>
-                                  (event.entity.details.Host ?? "") === value,
-                              )
-                            : events.find(
-                                (event) =>
-                                  (event.entity.details.User ?? "") === value,
-                              );
+                      const matchingEvent = events.find((event) => {
+                        if (label === "User") {
+                          return (
+                            event.entity.details.User === value ||
+                            event.entity.details.TargetUser === value
+                          );
+                        }
+
+                        if (label === "Endpoint") {
+                          return (
+                            event.entity.details.Host === value ||
+                            event.entity.details.Agent === value
+                          );
+                        }
+
+                        return event.entity.details.SourceIP === value;
+                      });
 
                       if (matchingEvent) {
-                        setSelectedId(matchingEvent.id);
+                        selectEvent(matchingEvent.id);
+
+                        window.requestAnimationFrame(() => {
+                          document
+                            .getElementById(
+                              `timeline-event-${matchingEvent.id}`,
+                            )
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "nearest",
+                            });
+                        });
                       }
                     }}
                     className="flex w-full items-center justify-between border border-transparent px-1 py-2.5 text-left transition hover:border-[#263441] hover:bg-white/[0.018]"
@@ -2361,8 +2724,18 @@ export function InvestigationWorkspace({
           </div>
 
           <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {responseActionsLoading ? (
+              <div className="col-span-full rounded-lg border border-[#263441] bg-[#101720] px-3 py-3 text-[9px] text-[#69727E]">
+                Loading persisted response actions...
+              </div>
+            ) : responseActionsError ? (
+              <div className="col-span-full rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.04] px-3 py-3 text-[9px] text-[#FF8A96]">
+                {responseActionsError}
+              </div>
+            ) : null}
+
             {responseActions.map(([name, detail]) => {
-              const status = actionState[name] ?? "idle";
+              const status = normalizedActionState[name] ?? "idle";
               const dangerous = name === "Block IOC";
 
               return (
@@ -2443,35 +2816,19 @@ export function InvestigationWorkspace({
       {selectedResponseAction && (
         <ConfirmActionDialog
           open={Boolean(confirmAction)}
-          actionName={selectedResponseAction[0]}
-          target={
-            selectedResponseAction[0] === "Isolate Host"
-              ? "WIN-10-23-17"
-              : selectedResponseAction[0] === "Disable Account"
-                ? "j.smith"
-                : selectedResponseAction[0] === "Block IOC"
-                  ? "185.199.109.153"
-                  : "WIN-10-23-17"
-          }
-          description={
-            selectedResponseAction[0] === "Isolate Host"
-              ? "Network containment will isolate the affected endpoint from the environment."
-              : selectedResponseAction[0] === "Disable Account"
-                ? "The compromised user account will be suspended to prevent further authentication."
-                : selectedResponseAction[0] === "Block IOC"
-                  ? "The selected indicator will be blocked through firewall and endpoint controls."
-                  : "A forensic memory image will be acquired from the affected endpoint."
-          }
+          actionName={selectedResponseAction.name}
+          target={selectedResponseAction.target}
+          description={selectedResponseAction.description}
           state={
-            actionState[selectedResponseAction[0]] === "running"
+            normalizedActionState[selectedResponseAction.name] === "running"
               ? "running"
-              : actionState[selectedResponseAction[0]] === "done"
+              : normalizedActionState[selectedResponseAction.name] === "done"
                 ? "success"
                 : "confirm"
           }
           onConfirm={confirmResponseAction}
           onClose={() => {
-            if (actionState[selectedResponseAction[0]] !== "running") {
+            if (normalizedActionState[selectedResponseAction.name] !== "running") {
               setConfirmAction(null);
             }
           }}
@@ -2481,12 +2838,31 @@ export function InvestigationWorkspace({
           <EvidencePreviewDrawer
         evidence={evidencePreview}
         onClose={() => setSelectedEvidenceName(null)}
+        onOpen={() => {
+          const sourceEventId = evidencePreview?.sourceEventId;
+
+          if (sourceEventId && events.some((event) => event.id === sourceEventId)) {
+            selectEvent(sourceEventId);
+          }
+
+          setSelectedEvidenceName(null);
+        }}
       />
+
+      {playbookError && (
+        <div className="mb-2 rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.04] px-3 py-2 text-[9px] leading-4 text-[#FF8A96]">
+          {playbookError}
+        </div>
+      )}
 
       <PlaybookDrawer
         open={playbookOpen}
         name="Credential Theft Containment"
-        description="Automated containment sequence for the active credential-theft investigation."
+        description={
+          playbookRunId
+            ? `Persisted run ${playbookRunId} for the active investigation.`
+            : "Automated containment sequence for the active investigation."
+        }
         steps={playbookSteps}
         running={playbookRunning}
         completed={playbookCompleted}
@@ -2554,7 +2930,39 @@ export function InvestigationWorkspace({
             }
 
             for (const step of playbookSteps) {
-              const stepResponse = await fetch(runUrl, {
+              const runningStepResponse = await fetch(runUrl, {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  stepId: step.id,
+                  stepStatus: "running",
+                }),
+              });
+
+              if (!runningStepResponse.ok) {
+                throw new Error(
+                  `Unable to start playbook step: ${step.title}.`,
+                );
+              }
+
+              setPersistedPlaybookSteps((current) =>
+                current.map((item) =>
+                  item.step_id === step.id
+                    ? {
+                        ...item,
+                        status: "running",
+                      }
+                    : item,
+                ),
+              );
+
+              await new Promise((resolve) => {
+                window.setTimeout(resolve, 350);
+              });
+
+              const completedStepResponse = await fetch(runUrl, {
                 method: "PATCH",
                 headers: {
                   "Content-Type": "application/json",
@@ -2565,11 +2973,22 @@ export function InvestigationWorkspace({
                 }),
               });
 
-              if (!stepResponse.ok) {
+              if (!completedStepResponse.ok) {
                 throw new Error(
                   `Unable to complete playbook step: ${step.title}.`,
                 );
               }
+
+              setPersistedPlaybookSteps((current) =>
+                current.map((item) =>
+                  item.step_id === step.id
+                    ? {
+                        ...item,
+                        status: "completed",
+                      }
+                    : item,
+                ),
+              );
             }
 
             const completedResponse = await fetch(runUrl, {
@@ -2694,7 +3113,10 @@ export function InvestigationWorkspace({
               detail: `${finding.title} was saved as a draft.`,
             });
 
-            setDraftFinding(finding);
+            setDraftFinding({
+              ...finding,
+              id: data.finding?.id,
+            });
             setFindingStatus("draft");
             setFindingValidationError(null);
 

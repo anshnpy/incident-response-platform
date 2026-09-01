@@ -32,7 +32,7 @@ interface FindingBuilderProps {
     technique: string;
     evidence: string[];
     entities: string[];
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 export function FindingBuilder({
@@ -49,21 +49,48 @@ export function FindingBuilder({
   const [technique, setTechnique] = useState("T1003.001");
   const [selectedEvidence, setSelectedEvidence] = useState<string[]>([]);
   const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const submit = () => {
-    if (!title.trim() || !description.trim()) return;
+  const submit = async () => {
+    if (saving) return;
 
-    onSave({
-      title: title.trim(),
-      description: description.trim(),
-      severity,
-      confidence,
-      technique,
-      evidence: selectedEvidence,
-      entities: selectedEntities,
-    });
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
 
-    onClose();
+    if (!trimmedTitle || !trimmedDescription) {
+      setValidationError(
+        !trimmedTitle
+          ? "Finding title is required."
+          : "Finding description is required.",
+      );
+      return;
+    }
+
+    setValidationError(null);
+    setSaving(true);
+
+    try {
+      await onSave({
+        title: trimmedTitle,
+        description: trimmedDescription,
+        severity,
+        confidence,
+        technique,
+        evidence: selectedEvidence,
+        entities: selectedEntities,
+      });
+
+      onClose();
+    } catch (error) {
+      setValidationError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save finding.",
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -275,6 +302,12 @@ export function FindingBuilder({
             </div>
 
             <div className="border-t border-[#263441] bg-[#0D131A] p-4">
+              {validationError && (
+                <div className="mb-3 rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.04] px-3 py-2 text-[9px] leading-4 text-[#FF8A96]">
+                  {validationError}
+                </div>
+              )}
+
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
@@ -287,11 +320,11 @@ export function FindingBuilder({
                 <button
                   type="button"
                   onClick={submit}
-                  disabled={!title.trim() || !description.trim()}
-                  className="flex items-center gap-2 rounded-lg bg-[#4F8CFF] px-4 py-2.5 text-[10px] font-medium text-white transition hover:bg-[#62AEFF] disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={saving}
+                  className="flex items-center gap-2 rounded-lg bg-[#4F8CFF] px-4 py-2.5 text-[10px] font-medium text-white transition hover:bg-[#62AEFF] disabled:cursor-wait disabled:opacity-50"
                 >
                   <Save className="h-3.5 w-3.5" />
-                  Save Draft
+                  {saving ? "Saving..." : "Save Draft"}
                 </button>
               </div>
             </div>
