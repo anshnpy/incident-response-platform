@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { AlertTriangle, RefreshCcw } from "lucide-react";
 
 export default function GlobalError({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
@@ -10,13 +11,13 @@ export default function GlobalError({
 }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#06080C] px-4 text-[#F5F7FA]">
-      <section className="w-full max-w-[520px] rounded-2xl border border-[#FF5364]/20 bg-[#0B1016] p-6">
+      <section className="w-full max-w-[620px] rounded-2xl border border-[#FF5364]/20 bg-[#0B1016] p-6">
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#FF5364]/20 bg-[#FF5364]/[0.05]">
             <AlertTriangle className="h-4 w-4 text-[#FF5364]" />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#FF5364]">
               Dashboard error
             </div>
@@ -25,10 +26,15 @@ export default function GlobalError({
               This workspace could not be loaded
             </h1>
 
-            <p className="mt-2 text-[10px] leading-5 text-[#69727E]">
-              Something went wrong while rendering this view. Retry the
-              current route without leaving the investigation workspace.
-            </p>
+            <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-[#263441] bg-[#080D12] p-3 text-[10px] leading-5 text-[#FF8A98]">
+              {error?.message || "Unknown runtime error"}
+            </pre>
+
+            {error?.digest && (
+              <div className="mt-2 font-mono text-[8px] text-[#596674]">
+                digest: {error.digest}
+              </div>
+            )}
           </div>
         </div>
 
