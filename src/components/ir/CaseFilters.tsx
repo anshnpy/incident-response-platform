@@ -49,8 +49,8 @@ export function CaseFilters({
   }
 
   return (
-    <div className="border-b border-[#263441] bg-[#0D1218] px-4 py-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="border-b border-[#263441] bg-[#0D1218] px-4 py-4 sm:px-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="h-3.5 w-3.5 text-[#59616D]" />
           <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#69727E]">
@@ -69,21 +69,23 @@ export function CaseFilters({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#59616D]" />
+        <div className="h-10 w-full overflow-hidden rounded-lg border border-[#263441] bg-[#0B1016] focus-within:border-[#4F8CFF]/50">
+          <div className="flex h-full items-center">
+            <Search className="ml-3 h-3.5 w-3.5 shrink-0 text-[#59616D]" />
 
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                updateParams({ q: query.trim() });
-              }
-            }}
-            placeholder="Search cases..."
-            className="w-full rounded-lg border border-[#263441] bg-[#0B1016] py-2 pl-8 pr-2.5 text-[9px] text-[#D9DEE7] outline-none placeholder:text-[#59616D] focus:border-[#4F8CFF]/50"
-          />
-        </label>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  updateParams({ q: query.trim() });
+                }
+              }}
+              placeholder="Search cases..."
+              className="min-w-0 flex-1 bg-transparent px-2.5 text-[10px] text-[#D9DEE7] outline-none placeholder:text-[#59616D]"
+            />
+          </div>
+        </div>
 
         <FilterSelect
           label="Severity"
