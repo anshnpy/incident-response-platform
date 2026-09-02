@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Incident Response Platform
 
-## Getting Started
+A production-ready SOC incident response workspace built around live **Wazuh security telemetry**, **Cloudflare Workers**, and **Cloudflare D1**.
 
-First, run the development server:
+## Overview
 
-```bash
+This platform takes a security analyst from **detection -> investigation -> response -> reporting** in one unified workspace.
+
+- Live Wazuh incidents and alerts
+- Analyst-owned investigation cases
+- Entity and evidence investigation
+- MITRE ATT&CK mapping
+- Findings and response actions
+- Threat intelligence views
+- Playbook execution
+- Operational reports
+- Global search
+- Cloudflare D1 persistence
+
+## SOC Workflow
+
+`	ext
+Wazuh Telemetry
+      |
+Incident Detection
+      |
+Case Creation
+      |
+Investigation
+      |
+Evidence + Entities + MITRE
+      |
+Findings
+      |
+Response / Playbooks
+      |
+Operational Reports
+``r
+
+## Screenshots
+
+### SOC Dashboard
+![SOC Dashboard](screenshots/dashboard.png)
+
+### Live Wazuh Incidents
+![Incidents](screenshots/incidents.png)
+
+### Investigation Cases
+![Cases](screenshots/cases.png)
+
+### Investigation Workspace
+![Investigation Workspace](screenshots/investigation.png)
+
+### MITRE ATT&CK
+![MITRE ATT&CK](screenshots/mitre.png)
+
+### Operational Reports
+![Reports](screenshots/reports.png)
+
+## Key Features
+
+### Live Incident Detection
+Security events are consumed from Wazuh and presented with severity, occurrences, affected endpoints, sources, and ATT&CK context.
+
+### Case Management
+Cases persist in Cloudflare D1 with severity, status, risk score, owner, affected assets, source incident references, and case activity.
+
+### Investigation Workspace
+A structured analyst workspace for timeline review, evidence inspection, entities, findings, audit trail, and response actions.
+
+### MITRE ATT&CK
+Observed security telemetry is mapped into a technique-oriented investigation view.
+
+### Response & Playbooks
+Case-scoped response actions and sequential playbook execution with persistent execution state.
+
+### Reporting
+Operational reports aggregate investigation, case, findings, and response information.
+
+## Tech Stack
+
+- Next.js
+- React
+- TypeScript
+- Tailwind CSS
+- Motion
+- Lucide React
+- Cloudflare Workers
+- Cloudflare D1
+- OpenNext
+- Wazuh
+
+## Development
+
+`ash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+` 
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Cloudflare development with remote resources:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`ash
+npx wrangler dev
+` 
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production
 
-## Learn More
+Deployed on Cloudflare Workers with Cloudflare D1 persistence, Wazuh telemetry integration, and Cloudflare VPC service binding.
 
-To learn more about Next.js, take a look at the following resources:
+## Security Notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Designed for controlled SOC, cybersecurity lab, and demonstration environments. Keep credentials and secrets outside source control.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Author
 
-## Deploy on Vercel
+**Anshuman Pandey**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Cybersecurity | SOC | Incident Response | Threat Detection
