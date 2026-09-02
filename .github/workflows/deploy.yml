@@ -1,4 +1,4 @@
-name: Deploy Incident Response Platform
+﻿name: Deploy Incident Response Platform
 
 on:
   push:
@@ -33,14 +33,22 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build
-        run: npm run build
-
       - name: Build OpenNext for Cloudflare
         run: npx opennextjs-cloudflare build
 
-      - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Upload Cloudflare Worker version
+        id: upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler versions upload 2>&1 | tee wrangler-upload.log
+          VERSION_ID=$(grep -oE 'Worker Version ID: [0-9a-f-]+' wrangler-upload.log | tail -1 | sed 's/.*: //')
+          if [ -z "$VERSION_ID" ]; then
+            echo "Failed to extract Worker Version ID" >&2
+            exit 1
+          fi
+          echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
+          echo "Uploaded version: $VERSION_ID"
+
+      - name: Deploy Cloudflare Worker version
+        run: npx wrangler versions deploy "${{ steps.upload.outputs.version_id }}@100%" -y
