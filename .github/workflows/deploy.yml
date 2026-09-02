@@ -1,4 +1,4 @@
-﻿name: Deploy Incident Response Platform
+name: Deploy Incident Response Platform
 
 on:
   push:
@@ -35,6 +35,9 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build OpenNext for Cloudflare
+        run: npx opennextjs-cloudflare build
 
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
