@@ -246,7 +246,7 @@ export function InvestigationGraph({
       </div>
 
       <div className="overflow-x-auto px-5 py-6">
-        <div className="mx-auto flex min-w-[860px] max-w-[1180px] items-center justify-center">
+        <div className="mx-auto flex min-w-[720px] w-max max-w-[1180px] items-center justify-center">
           {nodes.map((node, index) => {
             const style = nodeStyles[node.type];
             const Icon = style.icon;

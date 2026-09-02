@@ -205,7 +205,7 @@ export default async function Page({
               </div>
             </div>
 
-            <span className="ml-auto font-mono text-[9px] text-[#59616D]">
+            <span className="ml-auto font-mono text-[10px] text-[#59616D]">
               {indicators.length} indicators
             </span>
           </div>
@@ -233,25 +233,25 @@ export default async function Page({
                   </div>
 
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-[10px] text-[#D9DEE7]">
+                    <div className="truncate font-mono text-[11px] text-[#D9DEE7]">
                       {item.value}
                     </div>
 
-                    <div className="mt-0.5 text-[8px] uppercase tracking-[0.08em] text-[#59616D]">
+                    <div className="mt-0.5 text-[9px] uppercase tracking-[0.08em] text-[#59616D]">
                       {item.type}
                     </div>
                   </div>
                 </div>
 
-                <span className={`text-[9px] uppercase ${riskClass(item.maxLevel)}`}>
+                <span className={`text-[10px] uppercase ${riskClass(item.maxLevel)}`}>
                   {riskLabel(item.maxLevel)}
                 </span>
 
-                <span className="font-mono text-[9px] text-[#A7AFBA]">
+                <span className="font-mono text-[10px] text-[#A7AFBA]">
                   {item.sightings} sightings
                 </span>
 
-                <span className="flex items-center justify-end gap-1.5 text-[9px] text-[#59616D]">
+                <span className="flex items-center justify-end gap-1.5 text-[10px] text-[#59616D]">
                   Level {item.maxLevel}
                   <ArrowUpRight className="h-3 w-3" />
                 </span>

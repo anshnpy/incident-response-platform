@@ -18,15 +18,15 @@ export default function Page() {
             </div>
 
             <div>
-              <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
                 Platform Status
               </div>
 
-              <div className="mt-1 text-[12px] font-medium text-[#D9DEE7]">
+              <div className="mt-1 text-[14px] font-medium text-[#D9DEE7]">
                 Workspace operational
               </div>
 
-              <div className="mt-1 text-[9px] text-[#69727E]">
+              <div className="mt-1.5 text-[10px] text-[#69727E]">
                 Preferences are stored locally in this analyst workspace.
               </div>
             </div>
@@ -34,12 +34,12 @@ export default function Page() {
         </section>
 
         <section className="rounded-xl border border-[#263441] bg-[#101720]">
-          <div className="border-b border-[#263441]/70 px-4 py-3.5">
+          <div className="border-b border-[#263441]/70 px-5 py-4">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-[#4F8CFF]" />
 
               <div>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
                   Analyst Preferences
                 </div>
 

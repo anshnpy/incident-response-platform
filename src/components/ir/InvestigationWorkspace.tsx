@@ -920,7 +920,7 @@ export function InvestigationWorkspace({
         <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[235px_minmax(0,1fr)_300px]">
           <aside className="border-b border-[#263441]/70 xl:border-b-0 xl:border-r">
             <div className="border-b border-[#263441]/70 px-5 py-4">
-              <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
+              <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
                 Investigation Timeline
               </h2>
               <p className="mt-1 text-[10px] text-[#69727E]">
@@ -944,7 +944,7 @@ export function InvestigationWorkspace({
           </aside>
 
           <main className="min-w-0">
-            <div className="flex min-h-[430px] items-center justify-center px-6 py-12">
+            <div className="flex min-h-[360px] items-center justify-center sm:min-h-[430px] px-6 py-12">
               <div className="max-w-md text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[#263441] bg-[#10151C] text-[#59616D]">
                   <ShieldAlert className="h-4 w-4" />
@@ -968,6 +968,38 @@ export function InvestigationWorkspace({
       </section>
     );
   }
+
+  const evidenceDisplay = (() => {
+    const grouped = new Map<
+      string,
+      {
+        name: string;
+        type: string;
+        collected: string;
+        size: string;
+        count: number;
+      }
+    >();
+
+    for (const [name, type, collected, size] of evidence) {
+      const existing = grouped.get(name);
+
+      if (existing) {
+        existing.count += 1;
+        continue;
+      }
+
+      grouped.set(name, {
+        name,
+        type,
+        collected,
+        size,
+        count: 1,
+      });
+    }
+
+    return Array.from(grouped.values());
+  })();
 
   const selectedEvidence = evidence.find(
     ([name]) => name === selectedEvidenceName,
@@ -1571,7 +1603,7 @@ export function InvestigationWorkspace({
   };
 
   return (
-    <section className="ir-console overflow-hidden rounded-2xl border border-[#263441] bg-[#08090B]">
+    <section className="ir-console overflow-hidden rounded-2xl border border-[#263441] bg-[#08090B] xl:sticky xl:top-3">
       <InvestigationNarrative
         caseTitle={caseContext?.title ?? "Active investigation"}
         caseStatus={caseContext?.status}
@@ -1610,12 +1642,12 @@ export function InvestigationWorkspace({
         activity={persistedActivity}
       />
 
-      <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:grid-cols-[235px_minmax(0,1fr)_300px]">
-        <aside className="border-b border-[#263441]/70 xl:border-b-0 xl:border-r">
+      <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)_280px] xl:h-[calc(100vh-350px)] xl:min-h-[560px] xl:max-h-[760px] xl:grid-cols-[235px_minmax(0,1fr)_320px] xl:overflow-hidden">
+        <aside className="min-h-0 overflow-hidden border-b border-[#263441]/70 xl:border-b-0 xl:border-r">
           <div className="border-b border-[#263441]/70 px-5 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
                   Investigation Timeline
                 </h2>
                 <p className="mt-1 text-[10px] text-[#69727E]">
@@ -1631,7 +1663,7 @@ export function InvestigationWorkspace({
 
           <div className="px-3 py-4">
             <div
-              className={`relative overflow-y-auto pr-1 ${
+              className={`relative min-h-0 overflow-y-auto pr-1 ${
                 timelineExpanded ? "max-h-[720px]" : "max-h-[430px]"
               }`}
             >
@@ -1677,7 +1709,7 @@ export function InvestigationWorkspace({
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-[10px] text-[#8B93A1]">
+                              <span className="font-mono text-[11px] text-[#8B93A1]">
                                 {event.time}
                               </span>
 
@@ -1689,14 +1721,14 @@ export function InvestigationWorkspace({
                             </div>
 
                             <div
-                              className={`mt-0.5 text-[11px] font-medium ${
+                              className={`mt-0.5 text-[12px] font-medium ${
                                 selected ? "text-white" : "text-[#C7CDD6]"
                               }`}
                             >
                               {event.title}
                             </div>
 
-                            <div className="mt-1 text-[11px] leading-4.5 text-[#69727E]">
+                            <div className="mt-1 text-[10px] leading-4.5 text-[#69727E]">
                               {event.description}
                             </div>
                           </div>
@@ -1758,7 +1790,7 @@ export function InvestigationWorkspace({
 </div>
         </aside>
 
-        <main className="min-w-0">
+        <main className="min-h-0 min-w-0 overflow-y-auto overscroll-contain">
           <div className="border-b border-[#263441]/70 px-6 py-3.5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -1898,11 +1930,11 @@ export function InvestigationWorkspace({
               </div>
 
               <div className="mt-3 divide-y divide-[#263441]/60">
-                {evidence.map(([name, type, collected, size]) => (
+                {evidenceDisplay.map((item) => (
                   <button
-                    key={name}
+                    key={item.name}
                     type="button"
-                    onClick={() => setSelectedEvidenceName(name)}
+                    onClick={() => setSelectedEvidenceName(item.name)}
                     className="group flex w-full items-center gap-3 rounded-md px-1 py-2.5 text-left transition hover:bg-white/[0.018]"
                   >
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#263441] bg-[#121A22] text-[#35D6FF]">
@@ -1910,23 +1942,29 @@ export function InvestigationWorkspace({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[10px] font-medium text-[#D9DEE7]">
-                        {name}
+                      <div className="truncate text-[11px] font-medium text-[#D9DEE7]">
+                        {item.name}
                       </div>
-                      <div className="mt-0.5 text-[8px] text-[#69727E]">
-                        {type}
+                      <div className="mt-0.5 text-[9px] text-[#69727E]">
+                        {item.type}
                       </div>
                     </div>
 
                     <div className="hidden text-right xl:block">
                       <div className="text-[8px] text-[#59616D]">
-                        {collected}
+                        {item.collected}
                       </div>
                     </div>
 
                     <div className="w-[58px] text-right text-[9px] text-[#69727E]">
-                      {size}
+                      {item.size}
                     </div>
+
+                    {item.count > 1 && (
+                      <span className="shrink-0 rounded-md border border-[#35D6FF]/15 bg-[#35D6FF]/[0.04] px-1.5 py-1 text-[8px] font-medium text-[#35D6FF]">
+                        ?{item.count}
+                      </span>
+                    )}
 
                     <ChevronRight className="h-3 w-3 shrink-0 text-[#464D56]" />
                   </button>
@@ -1970,7 +2008,7 @@ export function InvestigationWorkspace({
                       {event.time}
                     </span>
 
-                    <span className="min-w-0 flex-1 truncate text-[11px] text-[#C7CDD6]">
+                    <span className="min-w-0 flex-1 truncate text-[12px] text-[#C7CDD6]">
                       {event.title}
                     </span>
 
@@ -2234,7 +2272,7 @@ export function InvestigationWorkspace({
               </div>
 
               <div className="mt-3.5">
-                <div className="max-w-4xl text-[16px] font-medium leading-6.5 text-[#E7ECF2]">
+                <div className="max-w-4xl text-[18px] font-medium leading-7 text-[#E7ECF2]">
                   {draftFinding?.title ??
                     "Credential dumping confirmed through LSASS memory access using mimikatz.exe."}
                 </div>
@@ -2330,7 +2368,7 @@ export function InvestigationWorkspace({
           <FindingAuditTrail events={findingAuditEvents} />
         </main>
 
-        <aside className="border-t border-[#263441] bg-[#0B1016] xl:border-l xl:border-t-0">
+        <aside className="min-h-0 overflow-y-auto overscroll-contain border-t border-[#263441] bg-[#0B1016] xl:border-l xl:border-t-0">
           <div className="border-b border-[#263441]/70 px-4 py-3.5">
             <div className="flex items-center justify-between">
               <div>
@@ -2362,18 +2400,18 @@ export function InvestigationWorkspace({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
+                  <div className="truncate text-[16px] font-semibold tracking-[-0.01em] text-[#E7ECF2]">
                     {entity.name}
                   </div>
 
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-[8px] font-medium uppercase tracking-[0.08em] text-[#69727E]">
+                    <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#69727E]">
                       {entity.type}
                     </span>
 
                     <span className="text-[#344255]">&middot;</span>
 
-                    <span className="text-[8px] font-medium uppercase tracking-[0.08em] text-[#FF5364]">
+                    <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-[#FF5364]">
                       {entity.verdict}
                     </span>
                   </div>
@@ -2384,7 +2422,7 @@ export function InvestigationWorkspace({
                     Risk
                   </div>
 
-                  <div className="mt-0.5 text-[16px] font-semibold text-[#FF5364]">
+                  <div className="mt-0.5 text-[20px] font-semibold text-[#FF5364]">
                     {Math.min(
                       100,
                       Math.max(
@@ -2507,7 +2545,7 @@ export function InvestigationWorkspace({
                       {label}
                     </div>
 
-                    <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[10px] text-[#C7CDD6]">
+                    <div className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[11px] text-[#C7CDD6]">
                       {value}
                     </div>
                   </div>
@@ -2516,7 +2554,7 @@ export function InvestigationWorkspace({
             </div>
 
             {entity.technique && (
-              <div className="mt-5">
+              <div className="mt-6">
                 <div className="mb-2 flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#7C6CFF]" />
                   <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
@@ -2538,7 +2576,7 @@ export function InvestigationWorkspace({
                       {entity.technique}
                     </div>
 
-                    <div className="mt-0.5 text-[8px] text-[#69727E]">
+                    <div className="mt-0.5 text-[9px] text-[#69727E]">
                       Credential Access
                     </div>
                   </div>
@@ -2548,7 +2586,7 @@ export function InvestigationWorkspace({
               </div>
             )}
 
-            <div className="mt-5">
+            <div className="mt-6">
               <div className="mb-2 flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#35D6FF]" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
@@ -2623,7 +2661,7 @@ export function InvestigationWorkspace({
                       <div className="text-[9px] uppercase tracking-[0.08em] text-[#59616D]">
                         {label}
                       </div>
-                      <div className="mt-0.5 font-mono text-[9px] text-[#C7CDD6]">
+                      <div className="mt-0.5 font-mono text-[10px] text-[#C7CDD6]">
                         {value}
                       </div>
                     </div>
@@ -2634,7 +2672,7 @@ export function InvestigationWorkspace({
               </div>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-6">
               <div className="mb-2 flex items-center gap-2">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#35D6FF]" />
                 <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
@@ -2674,7 +2712,7 @@ export function InvestigationWorkspace({
                     <Link2 className="h-3 w-3 shrink-0 text-[#35D6FF]" />
 
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-mono text-[8px] text-[#D9DEE7]">
+                      <div className="truncate font-mono text-[10px] text-[#D9DEE7]">
                         {value}
                       </div>
 
@@ -2743,7 +2781,7 @@ export function InvestigationWorkspace({
                   key={name}
                   type="button"
                   onClick={() => executeAction(name)}
-                  className={`group flex min-h-[54px] items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition ${
+                  className={`group flex min-h-[60px] items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition ${
                     status === "done"
                       ? "border-[#35D6A1]/25 bg-[#35D6A1]/[0.05]"
                       : status === "running"
@@ -2778,7 +2816,7 @@ export function InvestigationWorkspace({
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[11px] font-medium text-[#D7DDE5]">
+                    <div className="truncate text-[12px] font-medium text-[#D7DDE5]">
                       {name}
                     </div>
 

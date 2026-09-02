@@ -69,7 +69,7 @@ export function FindingAuditTrail({
         </div>
       ) : (
         <div className="mt-5 overflow-x-auto">
-          <div className="relative min-w-[560px] px-1 pb-1">
+          <div className="relative min-w-0 w-full overflow-x-auto px-1 pb-1">
             {events.length > 1 && (
               <div className="absolute left-3 right-3 top-[6px] h-px bg-[#253142]" />
             )}

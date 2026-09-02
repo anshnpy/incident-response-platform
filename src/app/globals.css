@@ -68,6 +68,7 @@ body {
     var(--background);
   color: var(--foreground);
   font-family:
+    var(--font-geist-sans),
     Arial,
     Helvetica,
     sans-serif;
@@ -150,6 +151,82 @@ button {
     transition-duration: 0.01ms !important;
   }
 }/* =========================================================
+   IR UI GLOBAL TYPOGRAPHY FOUNDATION
+   ========================================================= */
+
+.ir-ui {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* The original interface was authored with very small
+   8?11px utilities. Normalize those utilities inside the
+   application shell without changing layout logic. */
+.ir-ui .text-\[6px\] {
+  font-size: 8px !important;
+  line-height: 1.35 !important;
+}
+
+.ir-ui .text-\[7px\] {
+  font-size: 9px !important;
+  line-height: 1.35 !important;
+}
+
+.ir-ui .text-\[8px\] {
+  font-size: 10px !important;
+  line-height: 1.4 !important;
+}
+
+.ir-ui .text-\[9px\] {
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.ir-ui .text-\[10px\] {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.ir-ui .text-\[11px\] {
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.ir-ui .text-\[12px\] {
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+
+.ir-ui .text-\[13px\] {
+  font-size: 14px !important;
+}
+
+.ir-ui .text-\[14px\] {
+  font-size: 15px !important;
+}
+
+.ir-ui .text-\[15px\] {
+  font-size: 16px !important;
+}
+
+/* Comfortable controls across every console page. */
+.ir-ui input,
+.ir-ui select,
+.ir-ui textarea {
+  min-height: 38px;
+}
+
+.ir-ui input[type="checkbox"],
+.ir-ui input[type="radio"] {
+  min-height: 0;
+}
+
+/* Preserve deliberate compact icon controls. */
+.ir-ui button[aria-label] {
+  min-height: 0;
+}
+
+/* =========================================================
    IR CONSOLE TYPOGRAPHY + DENSITY FOUNDATION
    ========================================================= */
 

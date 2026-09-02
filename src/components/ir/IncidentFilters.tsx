@@ -134,7 +134,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-[#263441] bg-[#0B1016] px-2.5 py-2 text-[9px] text-[#A7AFBA] outline-none transition focus:border-[#4F8CFF]/50"
+        className="w-full rounded-lg border border-[#263441] bg-[#0B1016] px-3 py-2.5 text-[11px] text-[#A7AFBA] outline-none transition focus:border-[#4F8CFF]/50"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

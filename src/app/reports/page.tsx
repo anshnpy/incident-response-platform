@@ -124,7 +124,7 @@ export default async function Page() {
                 Security operations summary
               </h2>
 
-              <p className="mt-1 text-[10px] text-[#69727E]">
+              <p className="mt-1 text-[11px] text-[#69727E]">
                 Current persisted investigation posture from D1.
               </p>
             </div>
@@ -172,12 +172,12 @@ export default async function Page() {
         </section>
 
         <section className="overflow-hidden rounded-xl border border-[#263441] bg-[#101720]">
-          <div className="border-b border-[#263441] px-4 py-3.5">
-            <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
+          <div className="border-b border-[#263441] px-4 py-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#59616D]">
               Recent Cases
             </div>
 
-            <div className="mt-1 text-[10px] text-[#69727E]">
+            <div className="mt-1 text-[11px] text-[#69727E]">
               Latest persisted investigation activity
             </div>
           </div>
@@ -194,25 +194,25 @@ export default async function Page() {
                   className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1.5fr)_100px_120px_80px]"
                 >
                   <div className="min-w-0">
-                    <div className="font-mono text-[9px] text-[#59616D]">
+                    <div className="font-mono text-[10px] text-[#59616D]">
                       {item.id}
                     </div>
 
-                    <div className="mt-1 truncate text-[10px] font-medium text-[#D9DEE7]">
+                    <div className="mt-1 truncate text-[12px] font-medium text-[#D9DEE7]">
                       {item.title}
                     </div>
                   </div>
 
-                  <span className="self-center text-[9px] uppercase text-[#A7AFBA]">
+                  <span className="self-center text-[10px] uppercase text-[#A7AFBA]">
                     {item.severity}
                   </span>
 
-                  <span className="self-center text-[9px] uppercase text-[#35D6A1]">
+                  <span className="self-center text-[10px] uppercase text-[#35D6A1]">
                     {item.status}
                   </span>
 
                   <span
-                    className={`self-center font-mono text-[10px] font-semibold ${
+                    className={`self-center font-mono text-[12px] font-semibold ${
                       item.riskScore >= 80
                         ? "text-[#FF5364]"
                         : item.riskScore >= 50

@@ -276,7 +276,7 @@ export default async function CasesPage({
                       </div>
 
                       <div className="flex justify-start lg:justify-end">
-                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#263F63] bg-[#0E1723] px-3 py-2 text-[9px] font-medium text-[#62AEFF] transition group-hover:border-[#4F8CFF]/60 group-hover:bg-[#122033] group-hover:bg-[#122033]">
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#263F63] bg-[#0E1723] px-3 py-2 text-[9px] font-medium text-[#62AEFF] transition group-hover:border-[#4F8CFF]/60 group-hover:bg-[#122033]">
                           Open case
                           <ArrowUpRight className="h-3 w-3 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                         </span>

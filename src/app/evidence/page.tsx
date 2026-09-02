@@ -128,7 +128,7 @@ export default async function Page() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-[#263441] bg-[#101720]">
-          <div className="grid grid-cols-[minmax(0,1.7fr)_160px_minmax(0,1fr)_150px_90px] border-b border-[#263441] px-4 py-2.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
+          <div className="grid grid-cols-[minmax(0,1.7fr)_160px_minmax(0,1fr)_150px_90px] border-b border-[#263441] px-4 py-3 text-[10px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
             <span>Artifact</span>
             <span>Type</span>
             <span>Source</span>
@@ -141,7 +141,7 @@ export default async function Page() {
               <Link
                 key={item.id}
                 href={`/investigate?entity=${encodeURIComponent(item.name)}`}
-                className="group grid grid-cols-[minmax(0,1.7fr)_160px_minmax(0,1fr)_150px_90px] items-center gap-2 px-4 py-3 transition hover:bg-white/[0.018]"
+                className="group grid grid-cols-[minmax(0,1.7fr)_160px_minmax(0,1fr)_150px_90px] items-center gap-2 px-4 py-3.5 transition hover:bg-white/[0.018]"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#35D6FF]/15 bg-[#35D6FF]/[0.04]">
@@ -149,7 +149,7 @@ export default async function Page() {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-[10px] text-[#D9DEE7]">
+                    <div className="truncate font-mono text-[11px] text-[#D9DEE7]">
                       {item.name}
                     </div>
 
@@ -160,19 +160,19 @@ export default async function Page() {
                   </div>
                 </div>
 
-                <span className="truncate text-[9px] text-[#8B93A1]">
+                <span className="truncate text-[10px] text-[#8B93A1]">
                   {item.type}
                 </span>
 
-                <span className="truncate font-mono text-[9px] text-[#69727E]">
+                <span className="truncate font-mono text-[10px] text-[#69727E]">
                   {item.source}
                 </span>
 
-                <span className="text-[9px] text-[#69727E]">
+                <span className="text-[10px] text-[#69727E]">
                   {item.collected}
                 </span>
 
-                <span className="text-[9px] font-medium uppercase text-[#35D6A1]">
+                <span className="text-[10px] font-medium uppercase text-[#35D6A1]">
                   {item.status}
                 </span>
               </Link>

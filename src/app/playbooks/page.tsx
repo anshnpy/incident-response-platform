@@ -126,7 +126,7 @@ export default async function Page() {
         )}
 
         <section className="overflow-hidden rounded-xl border border-[#263441] bg-[#101720]">
-          <div className="grid grid-cols-[minmax(0,1.3fr)_145px_110px_140px] border-b border-[#263441] px-4 py-2.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
+          <div className="grid grid-cols-[minmax(0,1.3fr)_145px_110px_140px] border-b border-[#263441] px-4 py-3 text-[10px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
             <span>Playbook</span>
             <span>Case</span>
             <span>Status</span>
@@ -149,32 +149,32 @@ export default async function Page() {
                 <Link
                   key={run.id}
                   href={`/cases/${encodeURIComponent(run.case_id)}`}
-                  className="group grid grid-cols-[minmax(0,1.3fr)_145px_110px_140px] items-center gap-2 px-4 py-3 transition hover:bg-white/[0.018]"
+                  className="group grid grid-cols-[minmax(0,1.3fr)_145px_110px_140px] items-center gap-2 px-4 py-3.5 transition hover:bg-white/[0.018]"
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-[10px] font-medium text-[#D9DEE7]">
+                    <div className="truncate text-[12px] font-medium text-[#D9DEE7]">
                       {run.name}
                     </div>
 
-                    <div className="mt-0.5 truncate text-[8px] text-[#59616D]">
+                    <div className="mt-0.5 truncate text-[10px] text-[#59616D]">
                       {run.description}
                     </div>
 
-                    <div className="mt-1 font-mono text-[8px] text-[#4F5660]">
+                    <div className="mt-1 font-mono text-[9px] text-[#59616D]">
                       {run.id}
                     </div>
                   </div>
 
-                  <span className="truncate font-mono text-[9px] text-[#8B93A1]">
+                  <span className="truncate font-mono text-[10px] text-[#8B93A1]">
                     {run.case_id}
                   </span>
 
-                  <span className={`flex items-center gap-1.5 text-[9px] font-medium uppercase ${statusClass(run.status)}`}>
+                  <span className={`flex items-center gap-1.5 text-[10px] font-medium uppercase ${statusClass(run.status)}`}>
                     <StatusIcon status={run.status} />
                     {run.status}
                   </span>
 
-                  <span className="flex items-center gap-1.5 text-[9px] text-[#69727E]">
+                  <span className="flex items-center gap-1.5 text-[10px] text-[#69727E]">
                     {new Date(run.updated_at).toLocaleString("en-IN")}
                     <ArrowUpRight className="h-3 w-3 opacity-0 transition group-hover:opacity-100" />
                   </span>

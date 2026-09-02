@@ -195,7 +195,7 @@ export function IncidentList({
       <div className="grid items-center gap-2 border-b border-[#263441] px-4 py-2.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#59616D]"
         style={{
           gridTemplateColumns:
-            "minmax(0,1.6fr) 95px 95px 110px minmax(0,1fr) 90px",
+            "minmax(0,2fr) 100px 100px 120px minmax(0,1.15fr) 80px",
         }}
       >
         <span>Incident</span>
@@ -212,7 +212,7 @@ export function IncidentList({
             <Link
               key={`${incident.id}-${incident.title}-${incident.firstSeen}-${index}`}
               href={`/incidents/${encodeURIComponent(incident.id)}`}
-              className="group grid items-center gap-2 px-4 py-3 transition hover:bg-white/[0.018]"
+              className="group grid items-center gap-2 px-4 py-3.5 transition hover:bg-white/[0.018]"
               style={{
                 gridTemplateColumns:
                   "minmax(0,1.6fr) 95px 95px 110px minmax(0,1fr) 90px",
@@ -222,16 +222,16 @@ export function IncidentList({
                 <div className="flex items-center gap-2">
                   <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-[#59616D]" />
 
-                  <span className="truncate font-mono text-[10px] text-[#69727E]">
+                  <span className="truncate font-mono text-[11px] text-[#69727E]">
                     {incident.id}
                   </span>
                 </div>
 
-                <div className="mt-1 truncate text-[11px] font-medium text-[#D9DEE7]">
+                <div className="mt-1 truncate text-[13px] font-medium text-[#D9DEE7]">
                   {incident.title}
                 </div>
 
-                <div className="mt-0.5 truncate text-[9px] text-[#59616D]">
+                <div className="mt-0.5 truncate text-[10px] text-[#59616D]">
                   {incident.source}
                   {incident.technique
                     ? ` - ${incident.technique}`
@@ -278,7 +278,7 @@ export function IncidentList({
             No matching incidents
           </div>
 
-          <div className="mt-1 text-[9px] text-[#59616D]">
+          <div className="mt-1 text-[10px] text-[#59616D]">
             Adjust the active filters to broaden the incident set.
           </div>
         </div>

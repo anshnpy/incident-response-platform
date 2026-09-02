@@ -596,7 +596,7 @@ export function InvestigationShell({
                 </button>
 
                 {settingsOpen && !collapsed && (
-                  <div className="absolute bottom-12 left-0 z-50 w-[260px] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
+                  <div className="absolute bottom-12 left-0 z-50 w-[min(260px,calc(100vw-2rem))] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#A7AFBA]">
                       Settings
                     </div>
@@ -754,7 +754,7 @@ export function InvestigationShell({
                 </button>
 
                 {notificationsOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-[300px] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
+                  <div className="absolute right-0 top-11 z-50 w-[min(300px,calc(100vw-2rem))] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
                     <div className="flex items-center justify-between">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#A7AFBA]">
                         Notifications
@@ -805,7 +805,7 @@ export function InvestigationShell({
                 </button>
 
                 {filtersOpen && (
-                  <div className="absolute right-0 top-11 z-50 w-[260px] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
+                  <div className="absolute right-0 top-11 z-50 w-[min(260px,calc(100vw-2rem))] rounded-xl border border-[#263441] bg-[#0D131A] p-3 shadow-2xl">
                     <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#A7AFBA]">
                       Investigation Filters
                     </div>
@@ -859,7 +859,7 @@ export function InvestigationShell({
             </div>
           </header>
 
-          <main className="mx-auto max-w-[1720px] p-4 sm:p-5 lg:p-5">
+          <main className="ir-ui mx-auto max-w-[1720px] p-4 sm:p-5 lg:p-6">
             {children}
           </main>
         </div>

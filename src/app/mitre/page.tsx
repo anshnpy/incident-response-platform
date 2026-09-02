@@ -147,7 +147,7 @@ export default async function Page({
       ) : null}
 
       <section className="mt-4 overflow-hidden rounded-xl border border-[#263441] bg-[#101720]">
-        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px] border-b border-[#263441] px-4 py-2.5 text-[9px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
+        <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px] border-b border-[#263441] px-4 py-3 text-[10px] font-medium uppercase tracking-[0.08em] text-[#59616D]">
           <span>Technique</span>
           <span>Tactic</span>
           <span>Observed</span>
@@ -164,31 +164,31 @@ export default async function Page({
               <Link
                 key={item.id}
                 href={`/mitre?technique=${encodeURIComponent(item.id)}`}
-                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px] items-center gap-2 px-4 py-3 transition hover:bg-white/[0.018] ${
+                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_110px_110px] items-center gap-2 px-4 py-3.5 transition hover:bg-white/[0.018] ${
                   selected?.id === item.id
                     ? "bg-[#7C6CFF]/[0.035]"
                     : ""
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="font-mono text-[10px] font-semibold text-[#8B82FF]">
+                  <div className="font-mono text-[11px] font-semibold text-[#8B82FF]">
                     {item.id}
                   </div>
 
-                  <div className="mt-0.5 truncate text-[9px] text-[#D9DEE7]">
+                  <div className="mt-0.5 truncate text-[10px] text-[#D9DEE7]">
                     {item.name}
                   </div>
                 </div>
 
-                <span className="truncate text-[9px] text-[#8B93A1]">
+                <span className="truncate text-[10px] text-[#8B93A1]">
                   {item.tactic}
                 </span>
 
-                <span className="font-mono text-[9px] text-[#C7CDD6]">
+                <span className="font-mono text-[10px] text-[#C7CDD6]">
                   {item.count}
                 </span>
 
-                <span className="flex items-center gap-1.5 text-[9px] text-[#69727E]">
+                <span className="flex items-center gap-1.5 text-[10px] text-[#69727E]">
                   {item.maxLevel}
                   <ArrowUpRight className="h-3 w-3" />
                 </span>
