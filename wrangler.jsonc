@@ -13,8 +13,7 @@
 	"vpc_services": [
 		{
 			"binding": "WAZUH_INDEXER",
-			"service_id": "01a028f2-6830-7b02-a6b9-2114da624f08",
-			"remote": true
+			"service_id": "01a028f2-6830-7b02-a6b9-2114da624f08"
 		}
 	],
 	"services": [
@@ -34,3 +33,5 @@
 		}
 	]
 }
+
+

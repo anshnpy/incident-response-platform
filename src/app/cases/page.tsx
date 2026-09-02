@@ -14,13 +14,25 @@ import { InvestigationShell } from "@/components/ir/InvestigationShell";
 export const dynamic = "force-dynamic";
 
 interface CaseRow {
-  id: string;
-  title: string;
-  severity: string;
-  status: string;
-  affectedUser: string | null;
-  affectedEndpoint: string | null;
-  riskScore: number;
+  id?: unknown;
+  title?: unknown;
+  severity?: unknown;
+  status?: unknown;
+  affectedUser?: unknown;
+  affectedEndpoint?: unknown;
+  riskScore?: unknown;
+}
+
+function text(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : typeof value === "string" && Number.isFinite(Number(value))
+      ? Number(value)
+      : fallback;
 }
 
 function severityTone(severity: string) {
@@ -28,26 +40,26 @@ function severityTone(severity: string) {
     case "critical":
       return {
         rail: "bg-[#FF5364]",
-        badge: "border-[#FF5364]/25 bg-[#FF5364]/[0.08] text-[#FF6B7A]",
-        icon: "border-[#FF5364]/20 bg-[#FF5364]/[0.07] text-[#FF5364]",
+        badge:
+          "border-[#FF5364]/25 bg-[#FF5364]/[0.08] text-[#FF6B7A]",
       };
     case "high":
       return {
         rail: "bg-[#FF9F43]",
-        badge: "border-[#FF9F43]/25 bg-[#FF9F43]/[0.08] text-[#FFB15F]",
-        icon: "border-[#FF9F43]/20 bg-[#FF9F43]/[0.07] text-[#FF9F43]",
+        badge:
+          "border-[#FF9F43]/25 bg-[#FF9F43]/[0.08] text-[#FFB15F]",
       };
     case "medium":
       return {
         rail: "bg-[#F4C95D]",
-        badge: "border-[#F4C95D]/25 bg-[#F4C95D]/[0.08] text-[#F4C95D]",
-        icon: "border-[#F4C95D]/20 bg-[#F4C95D]/[0.07] text-[#F4C95D]",
+        badge:
+          "border-[#F4C95D]/25 bg-[#F4C95D]/[0.08] text-[#F4C95D]",
       };
     default:
       return {
         rail: "bg-[#4F8CFF]",
-        badge: "border-[#4F8CFF]/25 bg-[#4F8CFF]/[0.08] text-[#62AEFF]",
-        icon: "border-[#4F8CFF]/20 bg-[#4F8CFF]/[0.07] text-[#62AEFF]",
+        badge:
+          "border-[#4F8CFF]/25 bg-[#4F8CFF]/[0.08] text-[#62AEFF]",
       };
   }
 }
@@ -62,34 +74,72 @@ export default async function CasesPage({
   searchParams,
 }: {
   searchParams?: Promise<{
-    q?: string;
-    severity?: string;
-    status?: string;
-    risk?: string;
+    q?: string | string[];
+    severity?: string | string[];
+    status?: string | string[];
+    risk?: string | string[];
   }>;
 }) {
-  const { env } = await getCloudflareContext({ async: true });
+  let allCases: Array<{
+    id: string;
+    title: string;
+    severity: string;
+    status: string;
+    affectedUser: string | null;
+    affectedEndpoint: string | null;
+    riskScore: number;
+  }> = [];
+
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+
+    const result = await env.DB
+      .prepare(
+        `SELECT
+          id,
+          title,
+          severity,
+          status,
+          affected_user AS affectedUser,
+          affected_endpoint AS affectedEndpoint,
+          risk_score AS riskScore
+        FROM cases
+        ORDER BY updated_at DESC`,
+      )
+      .all<CaseRow>();
+
+    allCases = (result.results ?? []).map((item) => ({
+      id: text(item.id, "UNKNOWN"),
+      title: text(item.title, "Untitled case"),
+      severity: text(item.severity, "low"),
+      status: text(item.status, "unknown"),
+      affectedUser:
+        typeof item.affectedUser === "string" ? item.affectedUser : null,
+      affectedEndpoint:
+        typeof item.affectedEndpoint === "string"
+          ? item.affectedEndpoint
+          : null,
+      riskScore: numberValue(item.riskScore),
+    }));
+  } catch {
+    allCases = [];
+  }
+
   const params = await searchParams;
 
-  const result = await env.DB
-    .prepare(
-      `SELECT
-        id,
-        title,
-        severity,
-        status,
-        affected_user AS affectedUser,
-        affected_endpoint AS affectedEndpoint,
-        risk_score AS riskScore
-      FROM cases
-      ORDER BY updated_at DESC`,
-    )
-    .all<CaseRow>();
+  const qValue = Array.isArray(params?.q) ? params.q[0] : params?.q;
+  const severityValue = Array.isArray(params?.severity)
+    ? params.severity[0]
+    : params?.severity;
+  const statusValue = Array.isArray(params?.status)
+    ? params.status[0]
+    : params?.status;
+  const riskValue = Array.isArray(params?.risk)
+    ? params.risk[0]
+    : params?.risk;
 
-  const allCases = result.results ?? [];
-
-  const query = params?.q?.trim().toLowerCase() ?? "";
-  const requestedSeverity = params?.severity?.toLowerCase() ?? "";
+  const query = qValue?.trim().toLowerCase() ?? "";
+  const requestedSeverity = severityValue?.toLowerCase() ?? "";
 
   const cases = allCases.filter((item) => {
     const haystack = [
@@ -108,13 +158,15 @@ export default async function CasesPage({
       requestedSeverity === "all" ||
       item.severity.toLowerCase() === requestedSeverity;
 
-    const statusMatch =
-      !params?.status ||
-      (params.status === "active"
-        ? !["closed", "resolved"].includes(item.status.toLowerCase())
-        : item.status.toLowerCase() === params.status?.toLowerCase());
+    const statusLower = item.status.toLowerCase();
 
-    const riskMatch = params?.risk !== "high" || item.riskScore >= 80;
+    const statusMatch =
+      !statusValue ||
+      (statusValue.toLowerCase() === "active"
+        ? !["closed", "resolved"].includes(statusLower)
+        : statusLower === statusValue.toLowerCase());
+
+    const riskMatch = riskValue !== "high" || item.riskScore >= 80;
 
     return queryMatch && severityMatch && statusMatch && riskMatch;
   });
@@ -128,6 +180,9 @@ export default async function CasesPage({
   const closedCount = allCases.filter((item) =>
     ["closed", "resolved"].includes(item.status.toLowerCase()),
   ).length;
+
+  const statuses = [...new Set(allCases.map((item) => item.status))];
+  const severities = [...new Set(allCases.map((item) => item.severity))];
 
   return (
     <InvestigationShell>
@@ -155,10 +210,7 @@ export default async function CasesPage({
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-[#263441] bg-[#0B1016] shadow-[0_16px_48px_rgba(0,0,0,0.18)]">
-          <CaseFilters
-            statuses={[...new Set(allCases.map((item) => item.status))]}
-            severities={[...new Set(allCases.map((item) => item.severity))]}
-          />
+          <CaseFilters statuses={statuses} severities={severities} />
 
           <div className="border-b border-[#1B2530] px-4 py-3 sm:px-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -257,7 +309,11 @@ export default async function CasesPage({
                           <div className="text-[8px] font-medium uppercase tracking-[0.1em] text-[#596674]">
                             Risk score
                           </div>
-                          <div className={`mt-1 text-[15px] font-semibold ${riskTone(item.riskScore)}`}>
+                          <div
+                            className={`mt-1 text-[15px] font-semibold ${riskTone(
+                              item.riskScore,
+                            )}`}
+                          >
                             {item.riskScore}
                             <span className="ml-1 text-[9px] font-normal text-[#596674]">
                               /100
