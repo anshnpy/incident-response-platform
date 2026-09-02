@@ -92,14 +92,13 @@ Operational reports aggregate investigation, case, findings, and response inform
 
 ## Development
 
-`ash
 npm install
 npm run dev
 ` 
 
 Cloudflare development with remote resources:
 
-`ash
+
 npx wrangler dev
 ` 
 
