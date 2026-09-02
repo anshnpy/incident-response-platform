@@ -26,6 +26,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Build
+        run: npm run build
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
