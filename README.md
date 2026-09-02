@@ -92,15 +92,23 @@ Operational reports aggregate investigation, case, findings, and response inform
 
 ## Development
 
+### Install dependencies
+
+``bash
 npm install
+`` 
+
+### Run the Next.js development server
+
+``bash
 npm run dev
-` 
+`` 
 
-Cloudflare development with remote resources:
+### Cloudflare development with remote resources
 
-
+``bash
 npx wrangler dev
-` 
+`` 
 
 ## Production
 
