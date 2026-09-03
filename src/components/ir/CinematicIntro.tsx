@@ -200,7 +200,7 @@ export function CinematicIntro({
           <div className="absolute right-[10%] top-1/2 h-24 w-px -translate-y-1/2 bg-[#4F8CFF]/10" />
 
           <div className="relative flex h-full items-center justify-center px-6">
-            <div className="w-full max-w-4xl">
+            <div className="w-full max-w-[820px]">
               <div className="mb-6 flex items-center gap-3 font-mono text-[10px] tracking-[0.18em] text-[#515B66]">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#4F8CFF] shadow-[0_0_9px_rgba(79,140,255,0.45)]" />
 
@@ -211,7 +211,7 @@ export function CinematicIntro({
                 ANALYST CONSOLE
               </div>
 
-              <div className="max-w-2xl space-y-3 font-mono text-[11px] sm:text-[12px]">
+              <div className="w-full max-w-[720px] space-y-3 font-mono text-[11px] sm:text-[12px]">
                 {STEPS.map(([label, status], index) => (
                   <div
                     key={label}
@@ -235,7 +235,7 @@ export function CinematicIntro({
                 ))}
               </div>
 
-              <div className="ir-brand mt-12">
+              <div className="ir-brand mt-12 w-full max-w-[820px]">
                 <div className="text-[clamp(2.35rem,7vw,5.7rem)] font-medium leading-[0.9] tracking-[-0.055em] text-[#F1F3F5]">
                   INCIDENT RESPONSE
                   <br />
@@ -247,7 +247,7 @@ export function CinematicIntro({
                 </div>
               </div>
 
-              <div className="ir-access mt-8 flex items-center gap-3 font-mono text-[10px] tracking-[0.2em]">
+              <div className="ir-access mt-8 flex w-full max-w-[820px] items-center gap-3 font-mono text-[10px] tracking-[0.2em]">
                 <span className="h-px w-10 bg-[#4F8CFF]/45" />
 
                 <span className="text-[#A9BACB]">
@@ -267,3 +267,4 @@ export function CinematicIntro({
     </>
   );
 }
+
